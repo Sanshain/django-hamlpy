@@ -1,4 +1,4 @@
-from enum import Enum
+##from enum import Enum
 
 from .core import Stream
 
@@ -9,7 +9,7 @@ DJANGO_EXP_CLOSE = '}}'
 HTML_CHARS = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}
 
 
-class EscapeState(Enum):
+class EscapeState(object):
     normal = 0
     in_tag = 1
     in_exp = 2
