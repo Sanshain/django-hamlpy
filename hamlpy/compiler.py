@@ -9,6 +9,7 @@ from hamlpy.parser.core import Stream
 from hamlpy.parser.nodes import Node, read_node
 
 
+
 class Options(object):
     HTML4 = 'html4'
     HTML5 = 'html5'
