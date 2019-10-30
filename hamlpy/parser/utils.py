@@ -1,6 +1,6 @@
-from enum import Enum
+##from enum import Enum
 
-##from .core import Stream
+from .core import Stream
 
 DJANGO_TAG_OPEN = '{%'
 DJANGO_TAG_CLOSE = '%}'
