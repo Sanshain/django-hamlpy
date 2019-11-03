@@ -29,7 +29,21 @@ def get_haml_loader(loader):
 
             if extension in HAML_EXTENSIONS:
                 compiler = Compiler(options=options)
-                return compiler.process(contents)
+
+                import re
+                contents = re.sub('\n(?=(div|ul))', '\n%', contents)
+
+##                contents = contents.replace('\n',)
+                print contents
+
+                r = compiler.process(contents)
+
+                # save result
+                html_file = str(origin).rsplit('.', 1)[0] + '.html'
+                with open(html_file, 'w') as html:
+                    html.write('hello world')
+
+                return r
 
             return contents
 
