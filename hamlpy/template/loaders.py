@@ -31,9 +31,10 @@ def get_haml_loader(loader):
                 compiler = Compiler(options=options)
 
                 import re
-                contents = re.sub('\n(?=(div|ul))', '\n%', contents)
 
-##                contents = contents.replace('\n',)
+                tags = "(div|li|ul)"
+                contents = re.sub(r"((\n|^)\s*)(?={}\s)".format(tags), r"\1%", contents)
+
                 print contents
 
                 r = compiler.process(contents)
