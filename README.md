@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/nyaruka/django-hamlpy.svg?branch=master)](https://travis-ci.org/nyaruka/django-hamlpy)
 [![Coverage Status](https://coveralls.io/repos/github/nyaruka/django-hamlpy/badge.svg?branch=master)](https://coveralls.io/github/nyaruka/django-hamlpy?branch=master)
 
-# Original forked version:
+## Original forked version:
 
 [![PyPI Release](https://img.shields.io/pypi/v/django-hamlpy.svg)](https://pypi.python.org/pypi/django-hamlpy/)
 
