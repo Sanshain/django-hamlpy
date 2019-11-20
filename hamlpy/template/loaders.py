@@ -32,8 +32,10 @@ def get_haml_loader(loader):
 
                 import re
 
-                tags = "(div|li|ul)"
+                tags = "(div|li|ul|h2|h3|main)"
                 contents = re.sub(r"((\n|^)\s*)(?={}\s)".format(tags), r"\1%", contents)
+                # somehow don't work ^ instead (?<=\n)
+                contents = re.sub(r"(?<=\n)([\ \t]+)(%\w+[\ ])(%\S+)", r'\1\2\n\1\t\3', contents)
 
                 print contents
 
