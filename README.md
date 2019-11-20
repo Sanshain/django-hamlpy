@@ -13,6 +13,9 @@ Improvements:
 
 - Now you can write tags without % prefix on template
 - Added saving renderid django-templates nearby *.haml-files
+- Writing more then one tag in one line like slim
+
+For include ={...} sign variables set `self.django_inline_style = True` in compiler.py (by default its setting is `#{...}`)
 
 # From original documentation:
 
