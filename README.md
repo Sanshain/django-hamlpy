@@ -15,7 +15,9 @@ Improvements:
 - Added saving renderid django-templates nearby *.haml-files
 - Writing more then one tag in one line like slim
 
-For include ={...} sign variables set `self.django_inline_style = True` in compiler.py (by default its setting is `#{...}`)
+For include `={...}` sign variables set `self.django_inline_style = True` in compiler.py (by default its setting is `#{...}`)
+
+Comment is `#` on first symbol of line or tag -comment for multiline comments
 
 # From original documentation:
 
