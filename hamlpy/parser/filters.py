@@ -112,7 +112,8 @@ def python(content, options):
         try:
             exec(compiled_code)
         except Exception as e:
-            raise ParseException('Error whilst executing python filter node') from e
+            raise_from(ParseException('Error whilst executing python filter node'), e) 
+            #raise ParseException('Error whilst executing python filter node') from e
         finally:
             # restore the original stdout
             sys.stdout = sys.__stdout__
