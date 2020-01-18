@@ -32,7 +32,7 @@ def get_haml_loader(loader):
 
                 import re
 
-                tags = "(div|li|ul|h2|h3|main|button)"
+                tags = "(div|li|ul|h2|h3|main|button|link|script)"
                 contents = re.sub(r"((\n|^)\s*)(?={}[\s\.\#\(])".format(tags), r"\1%", contents) #tags without %
 
                 ## separate on lines: %main section => %main \n %section
