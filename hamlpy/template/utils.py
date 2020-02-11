@@ -66,12 +66,6 @@ def components_save(contents, origin):
     else:
         return content
 
-
-
-    print 'origin: ' + str(origin)
-
-
-
     pathname_origin, filename_origin = os.path.split(origin.__str__())          # [`.../templates/pages`, `tmpl.haml`]
     base_name = filename_origin.rsplit('.',1)[0]                                # `tmpl`
 
@@ -92,15 +86,11 @@ def components_save(contents, origin):
 
         types = (2*('js',), ('style','css'))
 
-        print types
-
         dct = dict(zip(jcs_content, types))
-
-##        print dct
 
         for _content in dct:
 
-            _type_save(_content, static_path, base_name, template_type, *dct[_content])
+            _type_save(_content.strip(), static_path, base_name, template_type, *dct[_content])
 
 
     return content
