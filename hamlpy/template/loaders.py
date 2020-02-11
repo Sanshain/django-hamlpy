@@ -47,7 +47,7 @@ def get_haml_loader(loader):
                     pathname_origin, filename_origin = os.path.split(origin.__str__()) # [`/templates/pages`, `tmpl.haml`]
                     base_name = filename_origin.rsplit('.',1)[0]                       # `tmpl`
 
-                    print 'pathname_origin%s'%pathname_origin
+
 
                     base_path, template_type = os.path.split(pathname_origin)          # [`/templates`,`pages`]
 
@@ -56,13 +56,9 @@ def get_haml_loader(loader):
                     else:                                                           # other pathes
                         template_type = 'pages'
 
-                    print '1:%s'%base_path
-
                     if template_type:
                         base_path = os.path.dirname(base_path)                   # path of app (for ex - 'main')
 
-
-                    print '2:%s'%base_path
 
 
 
