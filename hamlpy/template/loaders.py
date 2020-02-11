@@ -111,7 +111,7 @@ def get_haml_loader(loader):
                 contents = re.sub(r"((\n|^)\s*)(?={}[\s\.\#\(])".format(tags), r"\1%", contents) #tags without %
 
                 ## separate on lines: %main %section => %main \n %section
-                contents = re.sub(r"(?<=\n)([\ \t]+)(%\w+[\ ])(%\S+)", r'\1\2\n\1\t\3', contents)
+                contents = re.sub(r"(?<=\n)([\ \t]+)((%|\.)\w+[\ ])(%\S+)", r'\1\2\n\1\t\3', contents)
 
                 contents = re.sub(r"~([\w\s\"\.]+)", r'{% \1 %}', contents)               # ~v => {% v %}
 
