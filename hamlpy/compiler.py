@@ -23,7 +23,7 @@ class Options(object):
         self.cdata = False         # wrap CSS, Javascript etc content in CDATA section
 
         # implementation specific options
-        self.django_inline_style = False    # support both #{...} and ={...}
+        self.django_inline_style = True    # support both #{...} and ={...}
         self.tag_config = 'django'          # Django vs Jinja2 tags
         self.custom_self_closing_tags = {}  # additional self-closing tags
         self.debug_tree = False

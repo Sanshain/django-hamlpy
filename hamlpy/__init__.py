@@ -4,6 +4,30 @@ __version__ = '1.2'
 
 HAML_EXTENSIONS = ('haml', 'hamlpy')
 
+class HAML_UNIT:
+    ENABLE = False
+
+try:
+
+    from django.conf import settings
+    if hasattr(settings, 'LIGHT_UNITS'):
+
+        HAML_UNIT.ENABLE = True
+
+        HAML_UNIT.UNITS = settings.LIGHT_UNITS
+
+        print 'init HAML_UNIT'
+
+except Exception as e:
+    print 'except HAML_UNIT'
+    print HAML_UNIT.ENABLE
+    print 'except HAML_UNIT'
+    print e.message
+
+
+print 'HAML_EXTENSIONS'
+
+
 
 class Config(AppConfig):
     name = 'hamlpy'
