@@ -16,6 +16,10 @@ try:
 
         HAML_UNIT.UNITS = settings.LIGHT_UNITS
 
+        HAML_UNIT.STYLE_PREPROCS = (
+            settings.STYLE_PREPROCS if hasattr(settings, 'STYLE_PREPROCS') else []
+        )
+
         print 'init HAML_UNIT'
 
 except Exception as e:
@@ -25,6 +29,9 @@ except Exception as e:
     print e.message
 
 
+
+import os
+print os.path.abspath('')
 print 'HAML_EXTENSIONS'
 
 
