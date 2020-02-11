@@ -4,6 +4,9 @@ from django.template import loaders
 from os import listdir
 from os.path import dirname, splitext
 
+from hamlpy import HAML_UNIT
+import os
+
 MODULE_EXTENSIONS = tuple([suffix[0] for suffix in imp.get_suffixes()])
 
 
@@ -23,7 +26,8 @@ def package_contents(package):
     return contents
 
 
-def type_save(content, template_type, content_type, ext, optional=None):
+def _type_save(content, static_path, base_name, template_type, content_type,
+    ext, optional=None):
 
     '''
     save type
@@ -41,13 +45,21 @@ def type_save(content, template_type, content_type, ext, optional=None):
 
     style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
 
-    with open(style_flname, 'w') as style_file: style_file.write(cs_content.encode('utf-8'))
+    with open(style_flname, 'w') as style_file: style_file.write(content.encode('utf-8'))
 
 
-def convert(contents, origin):
+def components_save(contents, origin):
 
+    '''
+    divides sourse code (`contents`) to component parts and save it on each its dir
+
+    contents - source file content
+    origin - source path by object Origin
+
+    '''
 
     multi_content = contents.split(HAML_UNIT.UNITS['js'])
+
     content = multi_content[0]
 
     if len(multi_content) > 1: jcs_content = multi_content[1]
@@ -58,49 +70,37 @@ def convert(contents, origin):
 
     print 'origin: ' + str(origin)
 
-    pathname_origin, filename_origin = os.path.split(origin.__str__())          # [`/templates/pages`, `tmpl.haml`]
+
+
+    pathname_origin, filename_origin = os.path.split(origin.__str__())          # [`.../templates/pages`, `tmpl.haml`]
     base_name = filename_origin.rsplit('.',1)[0]                                # `tmpl`
 
-
-
-    base_path, template_type = os.path.split(pathname_origin)                   # [`/templates`,`pages`]
+    base_path, template_type = os.path.split(pathname_origin)                   # [`.../templates`,`pages`]
 
     if template_type in ('components', 'fragments', 'pages'): pass
     elif template_type == 'templates':  template_type = ''
-    else:                                                                       # other pathes
-        template_type = 'pages'
+    else: template_type = 'pages'
 
-    if template_type:
-        base_path = os.path.dirname(base_path)                   # path of app (for ex - 'main')
-
+    base_path = os.path.dirname(base_path) if template_type else base_path      # path of app (for ex - 'main')
 
     if jcs_content:
 
-
+        jcs_content = jcs_content.split(HAML_UNIT.UNITS['style'])
 
         static_path = os.path.join(base_path, 'static')
-
-        jcs_content = jcs_content.split(HAML_UNIT.UNITS['style'])
 
 
         types = (2*('js',), ('style','css'))
 
+        print types
+
         dct = dict(zip(jcs_content, types))
+
+##        print dct
 
         for _content in dct:
 
-            type_save(_content, template_type, *dct[_content])
+            _type_save(_content, static_path, base_name, template_type, *dct[_content])
 
-
-
-
-
-        js_content = jcs_content[0]
-
-        cs_content = jcs_content[1] if len(jcs_content) > 1 else ''
-
-        if js_content: type_save(cs_content, template_type, 'js')
-
-        if cs_content: type_save(cs_content, template_type, 'style','css')
 
     return content
