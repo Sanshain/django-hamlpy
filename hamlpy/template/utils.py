@@ -43,9 +43,41 @@ def _type_save(content, static_path, base_name, template_type, content_type,
 
     if not os.path.exists(cs_path): os.makedirs(cs_path)
 
-    style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
+    sub_content = None
 
-    with open(style_flname, 'w') as style_file: style_file.write(content.encode('utf-8'))
+    for key in HAML_UNIT.STYLE_PREPROCS.keys():
+        if key in content[0:content.find(' ')+1]: sub_content = key
+
+
+    sub_compiler = HAML_UNIT.STYLE_PREPROCS.get(sub_content, None)
+
+    if sub_compiler:
+
+        if hasattr(sub_compiler,'__call__'):
+
+            pp_flname = os.path.join(cs_path, base_name + '.' + sub_content or content_type)
+
+            print 'sub_content ' + sub_content
+
+            with open(pp_flname, 'w') as pp_file: pp_file.write(content)
+
+            print '{} compile for {} {}: '.format(sub_content, content_type, '\"%s %s\"'%(base_name, template_type))
+
+            print sub_compiler(pp_flname.replace('.%s'%sub_content, '.%s'%sub_content))
+
+
+##        elif type(sub_compiler) is tuple:
+##
+##            style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
+##
+##            sub_compiler[0](content, style_flname)
+
+
+    else:
+
+        style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
+
+        with open(style_flname, 'w') as style_file: style_file.write(content)
 
 
 def components_save(contents, origin):
@@ -90,7 +122,15 @@ def components_save(contents, origin):
 
         for _content in dct:
 
-            _type_save(_content.strip(), static_path, base_name, template_type, *dct[_content])
+            _type_save(
+                _content.encode('utf-8').strip(),
+                static_path,
+                base_name,
+                template_type,
+                *dct[_content])
 
 
     return content
+
+
+    print "less compiled to {}".format(tgt)

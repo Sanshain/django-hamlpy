@@ -23,12 +23,16 @@ def get_haml_loader(loader):
         def get_contents(self, origin):
             # Django>=1.9
             contents = super(Loader, self).get_contents(origin)
+
+            print origin.template_name
             name, _extension = os.path.splitext(origin.template_name)
             # os.path.splitext always returns a period at the start of extension
             extension = _extension.lstrip('.')
 
             if extension in HAML_EXTENSIONS:
                 compiler = Compiler(options=options)
+
+                print 'extension in HAML_EXTENSIONS: ' + extension
 
                 import re
 
