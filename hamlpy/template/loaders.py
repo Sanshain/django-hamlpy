@@ -32,8 +32,6 @@ def get_haml_loader(loader):
             if extension in HAML_EXTENSIONS:
                 compiler = Compiler(options=options)
 
-                print 'extension in HAML_EXTENSIONS: ' + extension
-
                 import re
 
 ##                from os.path import dirname

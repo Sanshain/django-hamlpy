@@ -66,16 +66,19 @@ def _type_save(content, static_path, base_name, template_type, content_type,
             print sub_compiler(pp_flname.replace('.%s'%sub_content, '.%s'%sub_content))
 
 
-##        elif type(sub_compiler) is tuple:
-##
-##            style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
-##
-##            sub_compiler[0](content, style_flname)
+        elif type(sub_compiler) is tuple:
+
+            style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
+
+            sub_compiler[0](content, style_flname)
 
 
     else:
 
-        style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
+        # for `'less' : None` in STYLE_PREPROCS will save to .*sub_content*.
+        # It means less-file need compile by outer tool like gulp-watch
+
+        style_flname = os.path.join(cs_path, base_name + '.' + (sub_content or ext or content_type))
 
         with open(style_flname, 'w') as style_file: style_file.write(content)
 

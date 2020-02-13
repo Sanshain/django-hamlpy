@@ -32,7 +32,6 @@ except Exception as e:
 
 import os
 print os.path.abspath('')
-print 'HAML_EXTENSIONS'
 
 
 
