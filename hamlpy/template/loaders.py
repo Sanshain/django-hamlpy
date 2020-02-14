@@ -31,6 +31,7 @@ def get_haml_loader(loader):
             # os.path.splitext always returns a period at the start of extension
             extension = _extension.lstrip('.')
 
+
             if extension in HAML_EXTENSIONS:
                 compiler = Compiler(options=options)
 

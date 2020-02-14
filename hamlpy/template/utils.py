@@ -165,7 +165,7 @@ def components_save(contents, origin):
 
 
 
-def _template_partition(contents, origin, component_type, origin_name, frag_name):
+def _template_partition(contents, origin, component_type, frag_name):
 
 
     '''
@@ -174,10 +174,14 @@ def _template_partition(contents, origin, component_type, origin_name, frag_name
     contents - source file content
     origin - source path by object Origin
     component_type - name of container type where will be inserted the partition (usually pages or fragments)
-    origin_name - origin component container name
     frag_name - component/fragment (not component container) name
 
+        origin_name - origin component container name
+
     '''
+
+
+    origin_name = origin.__str__().split(os.path.sep)[-1].split('.')[0]
 
     multi_content = contents.split(HAML_UNIT.UNITS['js'])
 
@@ -186,21 +190,28 @@ def _template_partition(contents, origin, component_type, origin_name, frag_name
 
     if not other_content: return haml_content
 
-    multi_content = multi_content[0].split(HAML_UNIT.UNITS['style'])
 
-    js_content = multi_content[0]
+    multi_content = other_content.split(HAML_UNIT.UNITS['style'])
+
+    js_content = '\n\n' + multi_content[0].strip()
     style_content = multi_content[1] if len(multi_content) > 1 else None
+
 
     # this files needs to be inserted its content to according js/less files
 
     # Find this files:
 
     _root = os.path.dirname( root(origin.__str__(), 'templates'))
-    _js_file = os.path.join(_root, 'static', 'js', component_type, origin_name + '.js')
 
-    # js_content = '// %s: \n\n'%component_type + js_content.strip() if component_type else js_content.strip()
+    origin_type = _get_origin_type(str(origin))
 
-    with open(_js_file, 'a+') as pen: pen.write(js_content)
+    # js_file = os.path.join(_root, 'static', 'js', component_type, origin_name + '.js')
+
+    js_file = os.path.sep.join([_root, 'static', 'js', origin_type, origin_name + '.js'])
+
+    # js_content = '// %s: \n\n'%component_type + js_content if component_type else js_content
+
+    with open(js_file, 'a+') as pen: pen.write(js_content)
 
     if style_content:
 
@@ -209,11 +220,13 @@ def _template_partition(contents, origin, component_type, origin_name, frag_name
         # _root, 'static', 'style', -> '../'
         _style_src = os.path.join('../', component_type, '%s.%s'%(frag_name, sub_content))
 
-        origin_type = _get_origin_type(os.path.dirname(str(origin)))
+        # origin_type = _get_origin_type(os.path.dirname(str(origin)))
 
         _style_tgt = os.path.join(_root, 'static', 'style', origin_type, '%s.%s'%(origin_name, sub_content))
 
-        _style = '@import "%s"'%_style_src
+        _style = '@import "%s"'%_style_src.repalce('\\','/')
+
+        print '++++++++++++++++++++++++++++++++++++++++++++++++++++++a'
 
         with open(_style_tgt, 'a+') as pen: pen.write(_style)
 
@@ -282,16 +295,17 @@ def embed_components(contents, origin, extension ='haml'):
 
             unit_file = os.path.join(_root, unit_type, unit_name)
 
-            with open(unit_file, 'r') as reader: unit = reader.readlines()
+            with open(unit_file, 'r') as reader: raw_unit = reader.read()
 
+            unit = _template_partition(raw_unit, origin, unit_type, unit_name)
 
 ##            first = [unit[0].decode('utf-8')]
 ##            second = [indent + line.decode('utf-8') for line in unit[1:len(unit)]]
 
             #first = [unit[0]]
-            second = [str(indent) + line for line in unit[0:len(unit)]]
+            second = '\n'.join([str(indent) + line for line in unit.split('\n')])
 
-            unit = ''.join(first + second)
+            unit = ''.join(second)
 
 
 ##          import io
