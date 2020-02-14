@@ -18,9 +18,6 @@ if hasattr(settings, 'HAMLPY_DJANGO_INLINE_STYLE'):
     options.update(django_inline_style=settings.HAMLPY_DJANGO_INLINE_STYLE)
 
 
-
-
-
 def get_haml_loader(loader):
 
 
@@ -37,8 +34,6 @@ def get_haml_loader(loader):
             # os.path.splitext always returns a period at the start of extension
             extension = _extension.lstrip('.')
 
-            print origin.template_name
-
             if extension in HAML_EXTENSIONS:
                 compiler = Compiler(options=options)
 
@@ -48,7 +43,7 @@ def get_haml_loader(loader):
 ##
 ##                par = lambda d, n=1: par(dirname(d), n-1) if n else (d)
 
-                if HAML_UNIT.ENABLE: contents = components_save(contents, origin)
+                if HAML_UNIT.ENABLE: contents = components_save(contents, origin).encode('utf-8')
 
 
                 # remaining content (haml(html)
@@ -75,11 +70,29 @@ def get_haml_loader(loader):
 
                         with open(unit_file, 'r') as reader: unit = reader.readlines()
 
-                        unit = '\n'.join([unit[0]]+[indent + line for line in unit[1:len(unit)]])
+
+                        first = [unit[0]]
+                        second = [indent + line for line in unit[1:len(unit)]]
+
+                        unit = ''.join(first + second)
+
+
+
+
+
+##                      import io
+##                      f = io.open("test", mode="r", encoding="utf-8")
+
+
+                        # unit = '\n'.join([unit[0]]+[indent + line for line in unit[1:len(unit)]])
+
+
+
 
                         contents = contents[0:m.start()] + unit + contents[m.end(): m.endpos()]
 
 #               now contents is full. Prepare it:
+
 
 
                 tags = "(div|li|ul|h2|h3|main|button|link|script|form|label)"

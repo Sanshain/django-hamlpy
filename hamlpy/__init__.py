@@ -34,7 +34,6 @@ import os
 print os.path.abspath('')
 
 
-
 class Config(AppConfig):
     name = 'hamlpy'
 
