@@ -6,7 +6,7 @@ from django.template.loaders import filesystem, app_directories
 
 from hamlpy import HAML_EXTENSIONS, HAML_UNIT
 from hamlpy.compiler import Compiler
-from hamlpy.template.utils import get_django_template_loaders, components_save
+from hamlpy.template.utils import get_django_template_loaders, components_save, embed_components
 
 # Get options from Django settings
 options = {}
@@ -20,9 +20,6 @@ if hasattr(settings, 'HAMLPY_DJANGO_INLINE_STYLE'):
 
 def get_haml_loader(loader):
 
-
-    # par = lambda d, edge="templates": par(dirname(d), n-1) if n else (d)
-    root = lambda p, e: p if os.path.split(p)[-1] == e else root(os.path.dirname(p), e)
 
     class Loader(loader.Loader):
         def get_contents(self, origin):
@@ -46,52 +43,20 @@ def get_haml_loader(loader):
                 if HAML_UNIT.ENABLE: contents = components_save(contents, origin).encode('utf-8')
 
 
+
                 # remaining content (haml(html)
 
-                reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')
+                with open(r'C:\Users\admin\Desktop\log_0.haml', 'w') as wtr: wtr.write(contents)
 
-
-##                for m in units:
-
-                while True:
-
-                    m = reg.search(contents)
-
-                    if not m: break
-                    else:
-
-                        indent, unit_type, unit_name = m.groups() # indent = indent.replace('\t', ' '* 4)
-                        unit_type = 'fragments' if unit_type == 'frag' else 'components'
-                        unit_name = '.'.join((unit_name,  extension))
-
-                        _root = root(origin.__str__(), 'templates')
-
-                        unit_file = os.path.join(_root, unit_type, unit_name)
-
-                        with open(unit_file, 'r') as reader: unit = reader.readlines()
-
-
-                        first = [unit[0]]
-                        second = [indent + line for line in unit[1:len(unit)]]
-
-                        unit = ''.join(first + second)
+                contents = embed_components(contents, origin)
 
 
 
-
-
-##                      import io
-##                      f = io.open("test", mode="r", encoding="utf-8")
-
-
-                        # unit = '\n'.join([unit[0]]+[indent + line for line in unit[1:len(unit)]])
-
-
-
-
-                        contents = contents[0:m.start()] + unit + contents[m.end(): m.endpos()]
 
 #               now contents is full. Prepare it:
+
+                with open(r'C:\Users\admin\Desktop\log_1.haml', 'w') as wtr: wtr.write(contents)
+
 
 
 
