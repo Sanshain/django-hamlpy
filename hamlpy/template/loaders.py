@@ -36,30 +36,30 @@ def get_haml_loader(loader):
                 compiler = Compiler(options=options)
 
                 import re
+                from time import clock
+
+
+
+                t = clock()
 
 ##                from os.path import dirname
 ##
 ##                par = lambda d, n=1: par(dirname(d), n-1) if n else (d)
 
                 if HAML_UNIT.ENABLE:
-                    contents, option = components_save(contents, origin).encode('utf-8')
+                    contents, option = components_save(contents, origin)
 
-
+                print 'middle rests: ' + str(clock() - t)
 
                 # remaining content (haml(html)
 
-                with open(r'C:\Users\admin\Desktop\log_0.haml', 'w') as wtr: wtr.write(contents)
-
                 contents = embed_components(contents, origin)
 
-
+                print '++++++++++++++++++++++++++++++++++++++++++++++++ hamlpy components time:'
+                print clock() - t
 
 
 #               now contents is full. Prepare it:
-
-                with open(r'C:\Users\admin\Desktop\log_1.haml', 'w') as wtr: wtr.write(contents)
-
-
 
 
                 tags = "(div|li|ul|h2|h3|main|button|link|script|form|label)"

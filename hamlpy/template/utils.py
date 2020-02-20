@@ -51,11 +51,13 @@ def _get_origin_type(pathname_origin):
     elif template_type == 'templates':  template_type = ''
     else: template_type = 'pages'
 
-    return template_type
+    base_path = os.path.dirname(base_path) if template_type else base_path      # path of app (for ex - 'main')
+
+    return base_path, template_type
 
 
 def _type_save(content, static_path, base_name, template_type, content_type,
-    ext, new=True):
+    ext, new=True, inside_unit_type=None, inside_unit_name=None):
 
     '''
     save type
@@ -70,228 +72,138 @@ def _type_save(content, static_path, base_name, template_type, content_type,
 
     option = 'w' if new else 'a'
 
-    cs_path = os.path.join(static_path, content_type, template_type)
+    ext = ext or content_type
 
-    if not os.path.exists(cs_path): os.makedirs(cs_path)
 
     sub_content = _get_sub_content_type(content)
-
     sub_compiler = HAML_UNIT.STYLE_PREPROCS.get(sub_content, None)
+
+
+    cs_path = os.path.join(static_path, content_type, template_type)
+    if not os.path.exists(cs_path): os.makedirs(cs_path)
+    cs_path = os.path.join(cs_path, base_name)
+
+    if inside_unit_type:
+        pp_path = os.path.join(static_path, content_type, inside_unit_type)
+        if not os.path.exists(pp_path): os.makedirs(pp_path)
+
+        pp_path = os.path.join(pp_path, inside_unit_name)
+        content = '/*%s %s*/\n\n'%(inside_unit_type, inside_unit_name) + content
+        print '----------------------------------------------------'
+
+    else: pp_path = cs_path
+
 
     if sub_compiler:
 
 
+        if hasattr(sub_compiler,'__call__'):                                    # just file to
 
+            pp_flname = pp_path + '.' + sub_content
+            with open(pp_flname, option) as pp_file: pp_file.write(content)        # save no-compile code to preprocesssor extension
 
+            print '{} compile for {} {}: '.format(sub_content, content_type, '\"%s %s\"'%(base_name, template_type))
 
-        # just file to
-
-        if hasattr(sub_compiler,'__call__'):
-
-            pp_flname = os.path.join(cs_path, base_name + '.' + sub_content or content_type)
-
-            print 'sub_content ' + sub_content
-
-##            with open(pp_flname, option) as pp_file: pp_file.write(content)        # save no-compile code to preprocesssor extension
-##
-##            print '{} compile for {} {}: '.format(sub_content, content_type, '\"%s %s\"'%(base_name, template_type))
-
-            print sub_compiler(pp_flname.replace('.%s'%sub_content, '.%s'%sub_content), option) # call func for compile to final file with appropriate extension (func self know where)
+            print sub_compiler(cs_path+'.'+ext, option) # call func for compile to final file with appropriate extension (func self know where)
 
 
         elif type(sub_compiler) is tuple:
 
-            if len(sub_compiler) > 1:
-
-                return sub_compiler[0](content)
+            if len(sub_compiler) > 1: return sub_compiler[0](content)           # turn compiled code (w/o saving somewhere)
 
             else:
 
-                style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
+                style_flname = cs_path + '.' + ext
 
                 sub_compiler[0](content, style_flname, option)                  # compile to finished file w/o middleware preprocessor saving
 
-
-
-
+                print 'save to %s by %s'%(style_flname, option)
     else:
 
         # for `'less' : None` in STYLE_PREPROCS will save to .*sub_content*.
         # It means less-file need compile by outer tool like gulp-watch
 
-        style_flname = os.path.join(cs_path, base_name + '.' + (sub_content or ext or content_type))
-
+        style_flname = cs_path + '.' + (sub_content or ext or content_type)
         with open(style_flname, option) as style_file: style_file.write(content)
 
 
-def components_save(contents, origin):
 
 
-    '''
-    divides sourse code (`contents`) to component parts and save it on each its dir,
+'''
+for call for page:
+
+    divides sourse code of pages(`contents`) to component parts and save it on each its dir,
     append to previous files
 
-    contents - source file content
-    origin - source path by object Origin
+    @params:
+        contents - source file content
+        origin - source path by object Origin
 
-    '''
+for call for components:
+
+
+    divides sourse code (`contents`) of component/fragment to component parts
+    and append its parts to common files of parent pages/fragment OR save it on each it dirs -
+    this options rely by func in HAML_UNIT.STYLE_PREPROCS
+
+    like components_save? - join its to once func
+
+    @params:
+        contents - source file content
+        origin - source path by object Origin
+        component_type - name of container type where will be inserted the partition (usually pages or fragments)
+        frag_name - component/fragment (not component container) name
+
+        origin_name - origin component container name
+
+'''
+def components_save(contents, origin, component_type=None, frag_name=None):
 
     multi_content = contents.split(HAML_UNIT.UNITS['js'])
 
     content = multi_content[0]
 
-    if len(multi_content) > 1: jcs_content = multi_content[1]
+    if len(multi_content) > 1: other_content = multi_content[1]
     else:
-        return (content, {})
+        return (content.encode('utf-8'), {})
 
-    pathname_origin, filename_origin = os.path.split(origin.__str__())          # [`.../templates/pages`, `tmpl.haml`]
-    base_name = filename_origin.rsplit('.',1)[0]                                # `tmpl`
-
-
-    template_type = _get_origin_type(origin.__str__())
-
-    base_path = os.path.dirname(base_path) if template_type else base_path      # path of app (for ex - 'main')
-
-    components = {}
-
-    if jcs_content:
-
-        jcs_content = jcs_content.split(HAML_UNIT.UNITS['style'])
-
-        static_path = os.path.join(base_path, 'static')
-
-
-        types = (2*('js',), ('style','css'))
-
-        jcss_info = dict(zip(jcs_content, types))          # _content : ('js','js'), _content : ('style','..
-
-        for _content in jcss_info:
-
-            res = _type_save(
-                _content.encode('utf-8').strip(),
-                static_path,
-                base_name,
-                template_type,
-                *jcss_info[_content])
-
-            if res: components[jcss_info[_content][1]] += res
-
-
-    return (content, components)
-
-
-    print "less compiled to {}".format(tgt)
-
-
-
-def _template_partition(contents, origin, component_type, frag_name):
-
-
-    '''
-    divides sourse code (`contents`) to component parts and save it on each its dir
-
-    like components_save? - join its to once func
-
-    contents - source file content
-    origin - source path by object Origin
-    component_type - name of container type where will be inserted the partition (usually pages or fragments)
-    frag_name - component/fragment (not component container) name
-
-        origin_name - origin component container name
-
-    '''
-
-
-    origin_name = origin.__str__().split(os.path.sep)[-1].split('.')[0]
-
-    multi_content = contents.split(HAML_UNIT.UNITS['js'])
-
-    haml_content = multi_content[0]
-    other_content = multi_content[1] if len(multi_content) > 1 else None
-
-    if not other_content: return haml_content
-
-
-    multi_content = other_content.split(HAML_UNIT.UNITS['style'])
-
-    js_content = '\n\n' + multi_content[0].strip()
-    style_content = multi_content[1] if len(multi_content) > 1 else None
-
-
-    # this files needs to be inserted its content to according js/less files
-
-    # Find this files:
-
-    _root = os.path.dirname( root(origin.__str__(), 'templates'))
-
-    origin_type = _get_origin_type(str(origin))
-
-    # js_file = os.path.join(_root, 'static', 'js', component_type, origin_name + '.js')
-
-    js_file = os.path.sep.join([_root, 'static', 'js', origin_type, origin_name + '.js'])
-
-    # js_content = '// %s: \n\n'%component_type + js_content if component_type else js_content
-
-    with open(js_file, 'a+') as pen: pen.write(js_content)
-
-    if style_content:
-
-        sub_content = _get_sub_content_type(style_content)
-
-        # _root, 'static', 'style', -> '../'
-        _style_src = os.path.join('../', component_type, '%s.%s'%(frag_name, sub_content))
-
-        # origin_type = _get_origin_type(os.path.dirname(str(origin)))
-
-        _style_tgt = os.path.join(_root, 'static', 'style', origin_type, '%s.%s'%(origin_name, sub_content))
-
-        _style = '@import "%s"'%_style_src.replace('\\','/')
-
-        print '++++++++++++++++++++++++++++++++++++++++++++++++++++++a'
-
-        with open(_style_tgt, 'a+') as pen: pen.write(_style)
-
-
-##    _get_sub_content_type(content)
-
-
-
-    return haml_content
+    _components = {}
 
 
     pathname_origin, filename_origin = os.path.split(origin.__str__())          # [`.../templates/pages`, `tmpl.haml`]
-    base_name = filename_origin.rsplit('.',1)[0]                                # `tmpl`
-
-    base_path, template_type = os.path.split(pathname_origin)                   # [`.../templates`,`pages`]
-
-    if template_type in ('components', 'fragments', 'pages'): pass
-    elif template_type == 'templates':  template_type = ''
-    else: template_type = 'pages'
-
-    base_path = os.path.dirname(base_path) if template_type else base_path      # path of app (for ex - 'main')
-
-    if jcs_content:
-
-        jcs_content = jcs_content.split(HAML_UNIT.UNITS['style'])
-
-        static_path = os.path.join(base_path, 'static')
+    base_name = filename_origin.rsplit('.',1)[0]                                # `tmpl` - name of main page
 
 
-        types = (2*('js',), ('style','css'))
+    base_path, template_type = _get_origin_type(pathname_origin)                # type of parent = (page|fragment|component)
+                                                                                # base_path - base path of app
 
-        dct = dict(zip(jcs_content, types))
+    other_content = other_content.split(HAML_UNIT.UNITS['style'])
 
-        for _content in dct:
-
-            res = _type_save(
-                _content.encode('utf-8').strip(),
-                static_path,
-                base_name,
-                template_type,
-                *dct[_content])
+    static_path = os.path.join(base_path, 'static')
 
 
-    return content
+    jcss_info = dict(zip(other_content, (2*('js',), ('style','css'))))          # _content : ('js','js'), _content : ('style','..
+
+    inside_elem_flag = True if frag_name else False
+
+    for _content in jcss_info:
+
+        res = _type_save(
+            _content.strip(),                                                   # .encode('utf-8')
+            static_path,
+            base_name,
+            template_type,
+            *jcss_info[_content],
+            new = not inside_elem_flag,
+            inside_unit_type=component_type,
+            inside_unit_name=frag_name)
+
+        if res: _components[jcss_info[_content][1]] += res
+
+
+    return (content.encode('utf-8'), _components)
+
+
 
 
 
@@ -323,7 +235,7 @@ def embed_components(contents, origin, extension ='haml'):
 
             with open(unit_file, 'r') as reader: raw_unit = reader.read()
 
-            unit = _template_partition(raw_unit, origin, unit_type, unit_name)      # get unit text
+            unit, option = components_save(raw_unit, origin, unit_type, unit_name)      # get unit text
 
 
 ##            first = [unit[0].decode('utf-8')]
