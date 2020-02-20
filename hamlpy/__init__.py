@@ -14,6 +14,8 @@ try:
 
         HAML_UNIT.ENABLE = True
 
+        HAML_UNIT.Mono = True
+
         HAML_UNIT.UNITS = settings.LIGHT_UNITS
 
         HAML_UNIT.STYLE_PREPROCS = (
@@ -32,6 +34,7 @@ except Exception as e:
 
 import os
 print os.path.abspath('')
+
 
 
 class Config(AppConfig):

@@ -41,7 +41,8 @@ def get_haml_loader(loader):
 ##
 ##                par = lambda d, n=1: par(dirname(d), n-1) if n else (d)
 
-                if HAML_UNIT.ENABLE: contents = components_save(contents, origin).encode('utf-8')
+                if HAML_UNIT.ENABLE:
+                    contents, option = components_save(contents, origin).encode('utf-8')
 
 
 

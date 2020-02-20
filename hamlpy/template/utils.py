@@ -55,17 +55,20 @@ def _get_origin_type(pathname_origin):
 
 
 def _type_save(content, static_path, base_name, template_type, content_type,
-    ext, optional=None):
+    ext, new=True):
 
     '''
     save type
 
+    base_name - base name of file (w/o extension) - usually consides with component name
     template_type - subdirectory for saving (`components`,`fragments`,`pages`)
     content_type - name of directory for saving (`style`,`js`)
     ext - extension for saving (`js`,`css`, `less`)
     optional - optional handle funcs for process (for example for less compile)
 
     '''
+
+    option = 'w' if new else 'a'
 
     cs_path = os.path.join(static_path, content_type, template_type)
 
@@ -77,24 +80,38 @@ def _type_save(content, static_path, base_name, template_type, content_type,
 
     if sub_compiler:
 
+
+
+
+
+        # just file to
+
         if hasattr(sub_compiler,'__call__'):
 
             pp_flname = os.path.join(cs_path, base_name + '.' + sub_content or content_type)
 
             print 'sub_content ' + sub_content
 
-            with open(pp_flname, 'w') as pp_file: pp_file.write(content)
+##            with open(pp_flname, option) as pp_file: pp_file.write(content)        # save no-compile code to preprocesssor extension
+##
+##            print '{} compile for {} {}: '.format(sub_content, content_type, '\"%s %s\"'%(base_name, template_type))
 
-            print '{} compile for {} {}: '.format(sub_content, content_type, '\"%s %s\"'%(base_name, template_type))
-
-            print sub_compiler(pp_flname.replace('.%s'%sub_content, '.%s'%sub_content))
+            print sub_compiler(pp_flname.replace('.%s'%sub_content, '.%s'%sub_content), option) # call func for compile to final file with appropriate extension (func self know where)
 
 
         elif type(sub_compiler) is tuple:
 
-            style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
+            if len(sub_compiler) > 1:
 
-            sub_compiler[0](content, style_flname)
+                return sub_compiler[0](content)
+
+            else:
+
+                style_flname = os.path.join(cs_path, base_name + '.' + ext or content_type)
+
+                sub_compiler[0](content, style_flname, option)                  # compile to finished file w/o middleware preprocessor saving
+
+
 
 
     else:
@@ -104,14 +121,15 @@ def _type_save(content, static_path, base_name, template_type, content_type,
 
         style_flname = os.path.join(cs_path, base_name + '.' + (sub_content or ext or content_type))
 
-        with open(style_flname, 'w') as style_file: style_file.write(content)
+        with open(style_flname, option) as style_file: style_file.write(content)
 
 
 def components_save(contents, origin):
 
 
     '''
-    divides sourse code (`contents`) to component parts and save it on each its dir
+    divides sourse code (`contents`) to component parts and save it on each its dir,
+    append to previous files
 
     contents - source file content
     origin - source path by object Origin
@@ -124,18 +142,17 @@ def components_save(contents, origin):
 
     if len(multi_content) > 1: jcs_content = multi_content[1]
     else:
-        return content
+        return (content, {})
 
     pathname_origin, filename_origin = os.path.split(origin.__str__())          # [`.../templates/pages`, `tmpl.haml`]
     base_name = filename_origin.rsplit('.',1)[0]                                # `tmpl`
 
-    base_path, template_type = os.path.split(pathname_origin)                   # [`.../templates`,`pages`]
 
-    if template_type in ('components', 'fragments', 'pages'): pass
-    elif template_type == 'templates':  template_type = ''
-    else: template_type = 'pages'
+    template_type = _get_origin_type(origin.__str__())
 
     base_path = os.path.dirname(base_path) if template_type else base_path      # path of app (for ex - 'main')
+
+    components = {}
 
     if jcs_content:
 
@@ -146,19 +163,21 @@ def components_save(contents, origin):
 
         types = (2*('js',), ('style','css'))
 
-        dct = dict(zip(jcs_content, types))
+        jcss_info = dict(zip(jcs_content, types))          # _content : ('js','js'), _content : ('style','..
 
-        for _content in dct:
+        for _content in jcss_info:
 
-            _type_save(
+            res = _type_save(
                 _content.encode('utf-8').strip(),
                 static_path,
                 base_name,
                 template_type,
-                *dct[_content])
+                *jcss_info[_content])
+
+            if res: components[jcss_info[_content][1]] += res
 
 
-    return content
+    return (content, components)
 
 
     print "less compiled to {}".format(tgt)
@@ -170,6 +189,8 @@ def _template_partition(contents, origin, component_type, frag_name):
 
     '''
     divides sourse code (`contents`) to component parts and save it on each its dir
+
+    like components_save? - join its to once func
 
     contents - source file content
     origin - source path by object Origin
@@ -224,7 +245,7 @@ def _template_partition(contents, origin, component_type, frag_name):
 
         _style_tgt = os.path.join(_root, 'static', 'style', origin_type, '%s.%s'%(origin_name, sub_content))
 
-        _style = '@import "%s"'%_style_src.repalce('\\','/')
+        _style = '@import "%s"'%_style_src.replace('\\','/')
 
         print '++++++++++++++++++++++++++++++++++++++++++++++++++++++a'
 
@@ -262,7 +283,7 @@ def _template_partition(contents, origin, component_type, frag_name):
 
         for _content in dct:
 
-            _type_save(
+            res = _type_save(
                 _content.encode('utf-8').strip(),
                 static_path,
                 base_name,
@@ -277,7 +298,12 @@ def _template_partition(contents, origin, component_type, frag_name):
 reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')
 
 def embed_components(contents, origin, extension ='haml'):
-
+    '''
+    embed components to page:
+        - insert haml/html component content to page
+        - move component js-code to page js-code
+        - move style code
+    '''
     while True:
 
 ##      for m in units: - may so but by back direct in cycle!
@@ -297,20 +323,22 @@ def embed_components(contents, origin, extension ='haml'):
 
             with open(unit_file, 'r') as reader: raw_unit = reader.read()
 
-            unit = _template_partition(raw_unit, origin, unit_type, unit_name)
+            unit = _template_partition(raw_unit, origin, unit_type, unit_name)      # get unit text
+
 
 ##            first = [unit[0].decode('utf-8')]
 ##            second = [indent + line.decode('utf-8') for line in unit[1:len(unit)]]
 
-            #first = [unit[0]]
-            second = '\n'.join([str(indent) + line for line in unit.split('\n')])
 
-            unit = ''.join(second)
+            #first = [unit[0]]
+            second = '\n'.join([str(indent) + line for line in unit.split('\n')])  # prepare for insert to parent tamplate
+
+            unit = ''.join(second)                                                 # join lines to one monotext
 
 
 ##          import io
 ##          f = io.open("test", mode="r", encoding="utf-8")
 
-            contents = contents[0:m.start()] + unit + contents[m.end(): m.endpos]
+            contents = contents[0:m.start()] + unit + contents[m.end(): m.endpos]   # insert to parent template (html/haml)
 
     return contents
