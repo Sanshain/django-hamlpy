@@ -14,7 +14,7 @@ try:
 
         HAML_UNIT.ENABLE = True
 
-        HAML_UNIT.Mono = True
+        HAML_UNIT.Autoprefix = True
 
         HAML_UNIT.UNITS = settings.LIGHT_UNITS
 
