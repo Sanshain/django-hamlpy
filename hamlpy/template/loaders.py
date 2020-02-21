@@ -68,7 +68,7 @@ def get_haml_loader(loader):
                 ## separate on lines: %main %section => %main \n %section
                 contents = re.sub(r"(?<=\n)([\ \t]+)((%|\.)\w+[\ ])(%\S+)", r'\1\2\n\1\t\3', contents)
 
-                contents = re.sub(r"~([\w\s\"\.]+)", r'{% \1 %}', contents)               # ~v => {% v %}
+                contents = re.sub(r"~([\w\s\"\.\/]+)", r'{% \1 %}', contents)               # ~v => {% v %}
 
 ##                print contents
 

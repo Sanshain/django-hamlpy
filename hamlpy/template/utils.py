@@ -43,6 +43,25 @@ def _get_sub_content_type(content):
         return None
 
 
+def _extract_blocks(dct, s, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
+
+    '''
+    find blocks in component template `s` (/*~block NAME */ CONTENT /*~*/) - extract
+    NAME and CONTENT inside components to dct and remove its from origin
+    '''
+
+    _blocks = _pattern.finditer(s)
+
+    s = re.sub(_pattern, '', s)
+
+    for b in _blocks:
+
+        dct[b.group(1)] = dct.get(b.group(1),'') + '\n' + b.group(2)
+
+    return s
+
+
+
 def _get_origin_type(pathname_origin):
 
     base_path, template_type = os.path.split(pathname_origin)
@@ -167,8 +186,8 @@ def components_save(contents, origin, component_type=None, frag_name=None):
     else:
         return (content.encode('utf-8'), {})
 
-    _components = {}
-
+    components_keeper = {}
+    outside_ress = {}
 
     pathname_origin, filename_origin = os.path.split(origin.__str__())          # [`.../templates/pages`, `tmpl.haml`]
     base_name = filename_origin.rsplit('.',1)[0]                                # `tmpl` - name of main page
@@ -188,6 +207,8 @@ def components_save(contents, origin, component_type=None, frag_name=None):
 
     for _content in jcss_info:
 
+        _content = _extract_blocks(outside_ress, _content)                      # <0.4ms for one replace
+
         res = _type_save(
             _content.strip(),                                                   # .encode('utf-8')
             static_path,
@@ -198,59 +219,40 @@ def components_save(contents, origin, component_type=None, frag_name=None):
             inside_unit_type=component_type,
             inside_unit_name=frag_name)
 
-        if res: _components[jcss_info[_content][1]] += res
+        if res: components_keeper[jcss_info[_content][1]] += res                #
+
+    def _indent_block(indnt, code):
+        _code = code.splitlines()
+        for line in _code:
+            line = indnt + line
+        return '\n'.join(_code)
+
+    if frag_name:
+        # if thrown by -frag or -unit tags: need insert into root (parent) page header (to -block links)
 
 
-    return (content.encode('utf-8'), _components)
+
+        for blo in outside_ress:
+
+            mch = re.search(r'(\s|\t)-block %s'%blo, content)                   # blo = links, onload etc
+
+            if not mch:
+                raise Exception('links block undefined in root template %s'%origin.__str__())
+
+                content = re.sub(
+                    r'(-extends "[\w\.]+")"', r'\1\n\t-block %s'%(blo, _indent_block(
+                        r'\t', outside_ress[blo]
+                    ),
+                    content)
+                )
+            else:
+                _blo = _indent_block(mch.groups()[0]+' '*8, outside_ress[blo])
+
+                # from django.core.urlresolvers import reverse
 
 
 
+##            _blo = _indent_block(mch.groups()[0]+' '*8, blo)
+##            _blo = '\n\1    :javascript\n' + _blo
 
-
-reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')
-
-def embed_components(contents, origin, extension ='haml'):
-    '''
-    embed components to page:
-        - insert haml/html component content to page
-        - move component js-code to page js-code
-        - move style code
-    '''
-    while True:
-
-##      for m in units: - may so but by back direct in cycle!
-
-        m = reg.search(contents)
-
-        if not m: break
-        else:
-
-            indent, unit_type, unit_name = m.groups() # indent = indent.replace('\t', ' '* 4)
-            unit_type = 'fragments' if unit_type == 'frag' else 'components'
-            unit_name = '.'.join((unit_name,  extension))
-
-            _root = root(origin.__str__(), 'templates')
-
-            unit_file = os.path.join(_root, unit_type, unit_name)
-
-            with open(unit_file, 'r') as reader: raw_unit = reader.read()
-
-            unit, option = components_save(raw_unit, origin, unit_type, unit_name)      # get unit text
-
-
-##            first = [unit[0].decode('utf-8')]
-##            second = [indent + line.decode('utf-8') for line in unit[1:len(unit)]]
-
-
-            #first = [unit[0]]
-            second = '\n'.join([str(indent) + line for line in unit.split('\n')])  # prepare for insert to parent tamplate
-
-            unit = ''.join(second)                                                 # join lines to one monotext
-
-
-##          import io
-##          f = io.open("test", mode="r", encoding="utf-8")
-
-            contents = contents[0:m.start()] + unit + contents[m.end(): m.endpos]   # insert to parent template (html/haml)
-
-    return contents
+                content = re.sub(r'(\s|\t)(-block links)',r'\1
