@@ -198,9 +198,9 @@ class Haml_Component(object):
 
     def _extract_blocks(outside_ress, static_content, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
 
-        '''
+        ''' status: -fixed -optimize !tested
         find blocks in static_content of component (/*~block NAME */ CONTENT /*~*/) - extract
-        NAME and CONTENT inside components to dct and remove its from origin
+        NAME and CONTENT inside components to outside_ress and remove its from origin
         '''
 
         _blocks = _pattern.finditer(static_content)
@@ -209,6 +209,8 @@ class Haml_Component(object):
 
         for b in _blocks:
 
+            # append key if none or append content to existed key in outside_ress
+            # (key is existed block name in root template for appending b.group(2) to it)
             outside_ress[b.group(1)] = outside_ress.get(b.group(1),'') + '\n' + b.group(2)
 
         return static_content
@@ -217,7 +219,7 @@ class Haml_Component(object):
 
     def _extract_const_block(dct, sub_content, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]*?)/\*~\*/')):
 
-        '''
+        ''' status: -fixed !optimize !tested
         find blocks in component template `s` (/*~const block */ CONTENT /*~*/) - extract
         CONTENT inside components to dct and remove its from origin
         '''
@@ -232,9 +234,11 @@ class Haml_Component(object):
             static_block = static_block.replace(url_tag.group(), url, 1)
 
         static = settings.STATIC_URL
-        static_block = re.sub(r"% *static ['\"]([\w\.\d\/\_]+)['\"] *%}", r"/%s/\1"%static, static_block)
+        _static_block = re.sub(r"% *static ['\"]([\w\.\d\/\_]+)['\"] *%}", r"/%s/\1"%static, static_block)
 
-        return static_block
+        sub_content = sub_content.replace(static_block, _static_block)
+
+        return sub_content
 
     def __indent_block(self, indnt, code):
         _code = code.splitlines()
