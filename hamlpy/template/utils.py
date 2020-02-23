@@ -1,6 +1,10 @@
 import imp
 
 from django.template import loaders
+
+from django.core.urlresolvers import reverse
+from django.conf import settings
+
 from os import listdir
 from os.path import dirname, splitext
 
@@ -60,7 +64,201 @@ def _extract_blocks(dct, s, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)
 
     return s
 
+def _extract_const_block(dct, s, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]*?)/\*~\*/')):
 
+    '''
+    find blocks in component template `s` (/*~const block */ CONTENT /*~*/) - extract
+    CONTENT inside components to dct and remove its from origin
+    '''
+
+    const_block = _pattern.search(s)
+
+    mchs = re.finditer(r'{% url "(\w+)" %}', const_block)
+
+
+
+    s = re.sub(_pattern, '', s)
+
+    for b in _blocks:
+
+        dct[b.group(1)] = dct.get(b.group(1),'') + '\n' + b.group(2)
+
+    return s
+
+class Haml_Component(object):
+
+    def __init__(self, contents, origin):
+        self.raw_content = contents
+        self.origin = origin.__str__()
+
+        _multicontent = contents.split(HAML_UNIT.UNITS['js'])
+
+        self.root_content = _multicontent[0]
+
+        if len(_multicontent) > 1:
+            other_content = _multicontent[1]
+
+
+        self.components_keeper = {
+            'blocks' : {}
+        }
+        self.outside_ress = {}
+
+        _pathname_origin, _filename_origin = os.path.split(origin.__str__())         # [`.../templates/pages`, `tmpl.haml`]
+
+        self.name = _filename_origin.rsplit('.',1)[0]                                # `tmpl` - name of main page
+        self.app_path, self.type = _get_origin_type(_pathname_origin)                # type of parent = (page|fragment|component)
+                                                                                     # base_path - base path of app
+        if other_content:
+            _other_content = other_content.split(HAML_UNIT.UNITS['style'])
+
+        self.static_path = os.path.join(base_path, 'static')
+
+        self.ress = dict(zip(_other_content, (2*('js',), ('style','css'))))          # # _content : ('js','js'), _content : ('style','..
+
+    def save_ress(self):
+        '''
+        put resourses (js/css) to appropriate files (or to self.components_keeper if STYLE_PREPROCS
+         has suitable flag w/o save to file)
+        '''
+        for _content in self.ress:
+
+            _content = self._extract_blocks(self.outside_ress, _content)          # <0.4ms for one replace
+
+            res = _type_save(
+                template_type,
+                *jcss_info[_content],
+                new = not inside_elem_flag,
+                inside_unit_type=component_type,
+                inside_unit_name=frag_name)
+
+            if res: components_keeper[jcss_info[_content][1]] += res
+
+    def _save_res(self, content_type,
+        ext, new=True, inside_unit_type=None, inside_unit_name=None):
+        '''
+        save type
+
+        base_name - base name of file (w/o extension) - usually consides with component name
+        template_type - subdirectory for saving (`components`,`fragments`,`pages`)
+        content_type - name of directory for saving (`style`,`js`)
+        ext - extension for saving (`js`,`css`, `less`)
+        optional - optional handle funcs for process (for example for less compile)
+
+        '''
+        content = self.root_content.strip()
+        static_path = self.static_path
+        base_name = self.name
+        template_type = self.type
+
+        option = 'w' if new else 'a'
+        ext = ext or content_type
+
+
+        sub_content = _get_sub_content_type(content)
+        sub_compiler = HAML_UNIT.STYLE_PREPROCS.get(sub_content, None)
+
+
+        cs_path = os.path.join(static_path, content_type, template_type)
+        if not os.path.exists(cs_path): os.makedirs(cs_path)
+        cs_path = os.path.join(cs_path, base_name)
+
+        if inside_unit_type:
+            pp_path = os.path.join(static_path, content_type, inside_unit_type)
+            if not os.path.exists(pp_path): os.makedirs(pp_path)
+
+            pp_path = os.path.join(pp_path, inside_unit_name)
+            content = '/*%s %s*/\n\n'%(inside_unit_type, inside_unit_name) + content
+            print '----------------------------------------------------'
+
+        else: pp_path = cs_path
+
+
+        if sub_compiler:
+
+            if hasattr(sub_compiler,'__call__'):                                    # just file to
+
+                pp_flname = pp_path + '.' + sub_content
+                with open(pp_flname, option) as pp_file: pp_file.write(content)        # save no-compile code to preprocesssor extension
+
+                print '{} compile for {} {}: '.format(sub_content, content_type, '\"%s %s\"'%(base_name, template_type))
+                print sub_compiler(cs_path+'.'+ext, option) # call func for compile to final file with appropriate extension (func self know where)
+
+            elif type(sub_compiler) is tuple:
+
+                if len(sub_compiler) > 1: return sub_compiler[0](content)           # turn compiled code (w/o saving somewhere)
+                else:
+                    sub_compiler[0](content, cs_path+'.'+ext, option)                  # compile to finished file w/o middleware preprocessor saving
+                    print 'save to %s by %s'%(style_flname, option)
+        else:
+
+            style_flname = cs_path + '.' + (sub_content or ext or content_type)
+            with open(style_flname, option) as style_file: style_file.write(content)
+
+
+    def _extract_blocks(outside_ress, static_content, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
+
+        '''
+        find blocks in static_content of component (/*~block NAME */ CONTENT /*~*/) - extract
+        NAME and CONTENT inside components to dct and remove its from origin
+        '''
+
+        _blocks = _pattern.finditer(static_content)
+
+        static_content = re.sub(_pattern, '', static_content)
+
+        for b in _blocks:
+
+            outside_ress[b.group(1)] = outside_ress.get(b.group(1),'') + '\n' + b.group(2)
+
+        return static_content
+
+
+
+    def _extract_const_block(dct, sub_content, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]*?)/\*~\*/')):
+
+        '''
+        find blocks in component template `s` (/*~const block */ CONTENT /*~*/) - extract
+        CONTENT inside components to dct and remove its from origin
+        '''
+
+        const_block = _pattern.search(sub_content)
+        static_block = const_block.group()
+
+        url_tags = re.finditer(r'{%\s*url [\'"]{1}(\w+)[\'"]{1}\s?(\d*)\s*%}', static_block)     # url
+        for url_tag in url_tags:
+            url_name, arg = url_tag.groups()
+            url = reverse(url_name, args=[arg]) if arg else reverse(url_name)
+            static_block = static_block.replace(url_tag.group(), url, 1)
+
+        static = settings.STATIC_URL
+        static_block = re.sub(r"% *static ['\"]([\w\.\d\/\_]+)['\"] *%}", r"/%s/\1"%static, static_block)
+
+        return static_block
+
+    def __indent_block(self, indnt, code):
+        _code = code.splitlines()
+        for line in _code:
+            line = indnt + line
+        return '\n'.join(_code)
+
+
+def _extract_blocks(dct, s, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
+
+    '''
+    find blocks in component template `s` (/*~block NAME */ CONTENT /*~*/) - extract
+    NAME and CONTENT inside components to dct and remove its from origin
+    '''
+
+    _blocks = _pattern.finditer(s)
+
+    s = re.sub(_pattern, '', s)
+
+    for b in _blocks:
+
+        dct[b.group(1)] = dct.get(b.group(1),'') + '\n' + b.group(2)
+
+    return s
 
 def _get_origin_type(pathname_origin):
 
@@ -186,7 +384,9 @@ def components_save(contents, origin, component_type=None, frag_name=None):
     else:
         return (content.encode('utf-8'), {})
 
-    components_keeper = {}
+    components_keeper = {
+        'blocks' : {}
+    }
     outside_ress = {}
 
     pathname_origin, filename_origin = os.path.split(origin.__str__())          # [`.../templates/pages`, `tmpl.haml`]
@@ -227,17 +427,22 @@ def components_save(contents, origin, component_type=None, frag_name=None):
             line = indnt + line
         return '\n'.join(_code)
 
-    if frag_name:
-        # if thrown by -frag or -unit tags: need insert into root (parent) page header (to -block links)
+
+
+
+
+    if not frag_name:
 
 
 
         for blo in outside_ress:
+        # if root template (for fragment - page by default recommend place to header directly):
+
 
             mch = re.search(r'(\s|\t)-block %s'%blo, content)                   # blo = links, onload etc
 
             if not mch:
-                raise Exception('links block undefined in root template %s'%origin.__str__())
+                raise Exception(blo+' block is undefined in root template %s'%origin.__str__())
 
                 content = re.sub(
                     r'(-extends "[\w\.]+")"', r'\1\n\t-block %s'%(blo, _indent_block(
@@ -245,14 +450,79 @@ def components_save(contents, origin, component_type=None, frag_name=None):
                     ),
                     content)
                 )
+
             else:
                 _blo = _indent_block(mch.groups()[0]+' '*8, outside_ress[blo])
 
                 # from django.core.urlresolvers import reverse
 
-
-
 ##            _blo = _indent_block(mch.groups()[0]+' '*8, blo)
 ##            _blo = '\n\1    :javascript\n' + _blo
 
-                content = re.sub(r'(\s|\t)(-block links)',r'\1
+                content = re.sub(r'(\s|\t)(-block links)',r'\1\2\n'+_blo, content)
+
+    else:
+
+
+        # if thrown by -frag or -unit tags: need insert into root (parent) page header (to -block links)
+        for blo in outside_ress:
+            # append to end each block
+            # component_type()
+            components_keeper['blocks'][blo]=(
+                components_keeper['blocks'].get(blo, '') + '\n\n' + outside_ress[blo]
+            )
+
+    return (content.encode('utf-8'), components_keeper)
+
+
+
+
+
+reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')
+reg_prefix = r'\n(\s*\.)'
+
+def embed_components(contents, origin, extension ='haml'):
+    '''
+    embed components to page:
+        - insert haml/html component content to page
+        - move component js-code to page js-code
+        - move style code
+    '''
+    while True:
+
+##      for m in units: - may so but by back direct in cycle!
+
+        m = reg.search(contents)
+
+        if not m: break
+        else:
+
+            indent, unit_type, _unit_name = m.groups() # indent = indent.replace('\t', ' '* 4)
+            unit_type = 'fragments' if unit_type == 'frag' else 'components'
+            unit_name = '.'.join((_unit_name,  extension))
+
+            _root = root(origin.__str__(), 'templates')
+
+            unit_file = os.path.join(_root, unit_type, unit_name)
+
+            with open(unit_file, 'r') as reader: raw_unit = reader.read()
+
+            print raw_unit
+
+##            if HAML_UNIT.Autoprefix:
+##                raw_unit = re.sub(reg_prefix, r'\n\1%s__'%_unit_name.replace('_',''), raw_unit)
+##                print raw_unit
+##
+##            with open(r'C:\Users\admin\Desktop\log.txt', 'w') as p: p.write(raw_unit)
+
+            unit, option = components_save(raw_unit, origin, unit_type, unit_name)      # get unit text
+
+            blocks = option.pop('blocks', '')
+
+            second = '\n'.join([str(indent) + line for line in unit.split('\n')])  # prepare for insert to parent tamplate
+
+            unit = ''.join(second)                                                 # join lines to one monotext
+
+            contents = contents[0:m.start()] + unit + contents[m.end(): m.endpos]   # insert to parent template (html/haml)
+
+    return contents
