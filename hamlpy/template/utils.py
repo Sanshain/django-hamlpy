@@ -2,6 +2,8 @@ import imp
 
 from django.template import loaders
 
+from warnings import warn
+
 from django.core.urlresolvers import reverse
 from django.conf import settings
 
@@ -85,7 +87,26 @@ def _extract_const_block(dct, s, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]
 
     return s
 
-class Haml_Component(object):
+
+haml = HamlComponent(contents, origin)
+inline_ress = haml.package_ress()
+
+
+class HamlComponent(object):
+
+    __slots__ = (
+        'raw_content',                          # raw content
+        'origin',                               # origin path (this? or root?)          ?
+        'content',                              # haml main (root) part of raw content
+        'res_keeper',                           # resourse keeper in keeper mode
+        'outside_ress',                         # res of inline resourse for aggregate insert into root_content
+        'name',                                 # name of (page)fragment or component
+        'app_path',                             # path to template dir (by app called this template)
+        'type',                                 # type of root (or current) template
+        'static_path',                          # path to static dir (by app called this template)
+        'ress',                                 # dict of resourses by type looked as {'style':Res(),'js':Res(type,value)}
+
+    )
 
     def __init__(self, contents, origin):
         self.raw_content = contents
@@ -93,13 +114,13 @@ class Haml_Component(object):
 
         _multicontent = contents.split(HAML_UNIT.UNITS['js'])
 
-        self.root_content = _multicontent[0]
+        self.content = _multicontent[0]
 
         if len(_multicontent) > 1:
             other_content = _multicontent[1]
 
 
-        self.components_keeper = {
+        self.res_keeper = {
             'blocks' : {}
         }
         self.outside_ress = {}
@@ -107,35 +128,95 @@ class Haml_Component(object):
         _pathname_origin, _filename_origin = os.path.split(origin.__str__())         # [`.../templates/pages`, `tmpl.haml`]
 
         self.name = _filename_origin.rsplit('.',1)[0]                                # `tmpl` - name of main page
-        self.app_path, self.type = _get_origin_type(_pathname_origin)                # type of parent = (page|fragment|component)
+        self.app_path, self.type = _get_origin_type(_pathname_origin)                # type of root = (page|fragment|component)
                                                                                      # base_path - base path of app
         if other_content:
             _other_content = other_content.split(HAML_UNIT.UNITS['style'])
 
         self.static_path = os.path.join(base_path, 'static')
 
-        self.ress = dict(zip(_other_content, (2*('js',), ('style','css'))))          # # _content : ('js','js'), _content : ('style','..
+        _types = (2*('js',), ('style','css'))
 
-    def save_ress(self):
+        res = namedtuple('Res', ['type','value'])
+
+        self.ress = {tip[0]: res(tip[1], v)  for tip, v in zip(types, _other_content)}
+
+#        self.ress = {tip[0]: {'type':tip[1], 'value' : v}  for tip, v in zip(types, _other_content)}
+#       {'style': {'type': 'css', 'value': 'style_content'}, 'js': {'type': 'js', 'value': 'js_content'}}
+
+
+##        self.ress = dict(zip(_other_content, (2*('js',), ('style','css'))))          # # _content : ('js','js'), _content : ('style','..
+
+        # self.script, self.style = self.ress
+
+    def package_ress(self, component_type=None, frag_name=None):
         '''
         put resourses (js/css) to appropriate files (or to self.components_keeper if STYLE_PREPROCS
          has suitable flag w/o save to file)
+
+        - and also extract -frag/-component resourses
+
+        if component_type is None,
         '''
-        for _content in self.ress:
+        for tip in self.ress:                                                   # tip => style|js
 
-            _content = self._extract_blocks(self.outside_ress, _content)          # <0.4ms for one replace
+            current_res = self.ress[tip].value
 
-            res = _type_save(
-                template_type,
-                *jcss_info[_content],
-                new = not inside_elem_flag,
+            # <0.4ms for one replace
+            current_res = self._extract_blocks(self.outside_ress, current_res)  # self.outside_ress - resourse that should be pasted inside `onload`, 'style' blocks into root template
+
+            # compile static blocks inside the resourse
+            current_res = self._restate_const_block(current_res)
+
+            resourse_carrier = self._save_res(current_res,
+                self.ress[tip].type, tip,
                 inside_unit_type=component_type,
                 inside_unit_name=frag_name)
 
-            if res: components_keeper[jcss_info[_content][1]] += res
 
-    def _save_res(self, content_type,
-        ext, new=True, inside_unit_type=None, inside_unit_name=None):
+            if resourse_carrier:
+                res_type = self.ress[tip].type
+                self.res_keeper[res_type] = self.res_keeper.get(res_type, '') + resourse_carrier
+
+        if not frag_name: ress_to_header(self.outside_ress)                     # if root template (just for fragment, not pages) (for page by default recommend place to header directly)
+        else: ress_to_unit(self.outside_ress)                                   # js need to be refresh in dom through createElement
+
+
+    def ress_to_header(self, outside_ress):
+
+        for blo in outside_ress:
+
+            mch = re.search(r'(\s|\t)-block %s'%blo, self.content)                   # blo = links, onload etc
+
+            if not mch:
+
+                warn(blo+' block is undefined in root template %s'%origin.__str__())  # raise Exception(blo+' block is undefined in root template %s'%origin.__str__())
+
+                content = re.sub(
+                    r'(-extends "[\w\.]+")"', r'\1\n\t-block %s'%(blo, _indent_block(
+                        r'\t', outside_ress[blo]
+                    ),
+                    content)
+                )
+
+            else:
+                _blo = self._indent_block(mch.groups()[0]+' '*4, outside_ress[blo])
+
+                content = re.sub(r'(\s|\t)(-block %s)'%blo, r'\1\2\n'+_blo, content)
+
+##            _blo = _indent_block(mch.groups()[0]+' '*8, blo)
+##            _blo = '\n\1    :javascript\n' + _blo
+
+    def embed_components(self, reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')):
+
+        contents = self.content
+        contents, origin, extension ='haml'
+
+
+        return self.content
+
+    def _save_res(self, content, ext, content_type,
+        inside_unit_type=None, inside_unit_name=None):
         '''
         save type
 
@@ -146,12 +227,12 @@ class Haml_Component(object):
         optional - optional handle funcs for process (for example for less compile)
 
         '''
-        content = self.root_content.strip()
+
         static_path = self.static_path
         base_name = self.name
         template_type = self.type
 
-        option = 'w' if new else 'a'
+        option = 'w' if inside_unit_name else 'a'
         ext = ext or content_type
 
 
@@ -217,11 +298,12 @@ class Haml_Component(object):
 
 
 
-    def _extract_const_block(dct, sub_content, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]*?)/\*~\*/')):
+    def _restate_const_block(sub_content, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]*?)/\*~\*/')):
 
         ''' status: -fixed !optimize !tested
-        find blocks in component template `s` (/*~const block */ CONTENT /*~*/) - extract
-        CONTENT inside components to dct and remove its from origin
+        find blocks in component template `sub_content` vs pattern (/*~const block */ CONTENT /*~*/)
+        - compile CONTENT inside the `const block` to static condition end return sub_content
+        with compiled block
         '''
 
         const_block = _pattern.search(sub_content)
