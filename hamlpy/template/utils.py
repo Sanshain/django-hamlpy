@@ -3,7 +3,7 @@ import imp
 from django.template import loaders
 
 from warnings import warn
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 from django.core.urlresolvers import reverse
 from django.conf import settings
@@ -37,7 +37,11 @@ def package_contents(package):
 
 
 # par = lambda d, edge="templates": par(dirname(d), n-1) if n else (d)
-root = lambda p, e: p if os.path.split(p)[-1] == e else root(os.path.dirname(p), e)
+root = lambda p, e, d=3: (
+    p if os.path.split(p)[-1] == e else (
+        root(os.path.dirname(p), e, d-1) if d>0 else None
+    )
+)
 
 
 def _get_sub_content_type(content):
@@ -90,8 +94,7 @@ def _extract_const_block(dct, s, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]
     return s
 
 
-haml = HamlComponent(contents, origin)
-inline_ress = haml.package_ress()
+
 
 
 res = namedtuple('Res', ['type','value'])
@@ -110,6 +113,7 @@ class HamlComponent(object):
         'static_path',                          # path to static dir (by app called this template)
         'ress',                                 # dict of resourses by type looked as {'style':Res(),'js':Res(type,value)}
         'is_root',                              # define is current component is root or subcontent of root
+        'save_flag',                            # flag for mode file write for embed_coponents (if once ont keeper then 'a')
         # if its subcontent (fragment or component) of root content (page or fargment):
         'component_type',                       # type of current component
         'frag_name',                            # name of current subelement
@@ -130,7 +134,8 @@ class HamlComponent(object):
 
         if len(_multicontent) > 1: other_content = _multicontent[1]
 
-        self.res_keeper = {'blocks' : {}}
+        self.res_keeper = {}
+        self.save_flag = { 'js':'w', 'css' : 'w' }                              # defaultdict(lambda x: 'w')
         self.outside_ress = {}
 
         _pathname_origin, _filename_origin = os.path.split(self.origin)         # [`.../templates/pages`, `tmpl.haml`]
@@ -143,7 +148,7 @@ class HamlComponent(object):
         if other_content:
             _other_content = other_content.split(HAML_UNIT.UNITS['style'])
             _types = (2*('js',), ('style','css'))
-            self.ress = {tip[0]: res(tip[1], v)  for tip, v in zip(types, _other_content)}
+            self.ress = {tip[0]: res(tip[1], v)  for tip, v in zip(_types, _other_content)} # {'style': Res(type='css', value='style_content'), 'js': Res(type='js', value='js_content')}
 
 
     def package_ress(self, root_content = None):
@@ -176,25 +181,23 @@ class HamlComponent(object):
 
 
             if resourse_carrier:                                                # if is compiled contents
-                res_type = self.ress[tip].type
+                res_type = self.ress[tip].type                                  # js/css
                 self.res_keeper[res_type] = self.res_keeper.get(res_type, '') + resourse_carrier
-
+            else:
+                self.save_flag[self.ress[tip].type] = 'a'
 
 
         # if is_root and type = page -> `style`,`onload`, script` to headers by ress_to_header
         if self.type == "page":
             if self.is_root: self.ress_move_on_page()
             elif not self.is_root: self.ress_to_keep(self.outside_ress)
-        if self.type == 'fragment':
+        if self.type == 'fragment' or self.type == 'component':
 
             self.outside_ress = self.prep_tags(self.outside_ress)                  # prepare: inside in tags script/style
 
-            if self.is_root:
-                self.ress_append(self.outside_ress, self.content)
-
+            if self.is_root: self.ress_append(self.outside_ress, self.content)
             elif not self.is_root:
                 self.ress_append(self.outside_ress, root_content)
-
 
 
         # js need to be refresh in dom through createElement
@@ -281,7 +284,7 @@ class HamlComponent(object):
     def embed_components(self, reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')):
 
         contents = self.content
-        # contents, origin, extension ='haml'
+        extension ='haml'
 
         while True:
 
@@ -296,27 +299,28 @@ class HamlComponent(object):
                 unit_type = 'fragments' if unit_type == 'frag' else 'components'
                 unit_name = '.'.join((_unit_name,  extension))
 
-                templates_path = root(origin.__str__(), 'templates')
+                templates_path = root(self.origin, 'templates')
 
                 unit_file = os.path.join(templates_path, unit_type, unit_name)
 
                 with open(unit_file, 'r') as reader: raw_unit = reader.read()
 
-                haml_component = HamlComponent(origin, raw_unit, unit_type, unit_name)
-                haml_component.package_ress(contents)
+                haml_component = HamlComponent(self.origin, raw_unit, unit_type, unit_name)
+                ress_keeper = haml_component.package_ress(contents)
 
-                inline_blocks = ress_keeper.pop('blocks', '')                   # onload, style, script
 
-                for frag_block in inline_blocks:
-                    pass
+                for frag_block in ress_keeper:                                  # js/css
+                    self.res_keeper[frag_block] = self.res_keeper.get('frag_block','') + ress_keeper[frag_block]
+                for frag_block in self.ress_keeper:
+                    _dir = 'style' if frag_block == 'css' else 'style'
+                    tgt = os.path.join(self.static_path, _dir, '.'.join(self.name, frag_block))
+                    with open(tgt, self.save_flag[frag_block]) as pen: pen.write(self.res_keeper[frag_block])
 
                 unit = '\n'.join([str(unit_indn) + line for line in haml_component.content.split('\n')])
 
                 start, end, endpos = component.start(), component.end(), component.endpos
 
                 contents = contents[0:start] + unit + contents[end: endpos]
-
-
 
 
         return contents
@@ -363,7 +367,7 @@ class HamlComponent(object):
             if not os.path.exists(pp_path): os.makedirs(pp_path)
 
             pp_path = os.path.join(pp_path, inside_unit_name)
-            content = '/*%s %s*/\n\n'%(inside_unit_type, inside_unit_name) + content
+            content = r'/*%s %s*/\n\n'%(inside_unit_type, inside_unit_name) + content
             print '----------------------------------------------------'
 
         else: pp_path = cs_path
@@ -384,7 +388,7 @@ class HamlComponent(object):
                 if len(sub_compiler) > 1: return sub_compiler[0](content)           # turn compiled code (w/o saving somewhere)
                 else:
                     sub_compiler[0](content, cs_path+'.'+ext, option)                  # compile to finished file w/o middleware preprocessor saving
-                    print 'save to %s by %s'%(style_flname, option)
+                    print 'save to %s by %s'%(cs_path+'.'+ext, option)
         else:
 
             style_flname = cs_path + '.' + (sub_content or ext or content_type)
@@ -392,7 +396,7 @@ class HamlComponent(object):
 
 
 
-    def _extract_blocks(outside_ress, static_content, tip, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
+    def _extract_blocks(self, outside_ress, static_content, tip, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
 
         ''' status: -fixed -optimize !tested
         find blocks in static_content of component (/*~block NAME */ CONTENT /*~*/) - extract
@@ -422,27 +426,29 @@ class HamlComponent(object):
 
 
 
-    def _restate_const_block(sub_content, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]*?)/\*~\*/')):
+    def _restate_const_block(self, sub_content, _pattern = re.compile(r'/\*~const \w+\*/([\s\S]*?)/\*~\*/')):
 
         ''' status: -fixed !optimize !tested
-        find blocks in component template `sub_content` vs pattern (/*~const block */ CONTENT /*~*/)
+        find block in component template `sub_content` vs pattern (/*~const block */ CONTENT /*~*/)
         - compile CONTENT inside the `const block` to static condition end return sub_content
-        with compiled block
+        with compiled block. Otherwise just return sub_content
         '''
 
         const_block = _pattern.search(sub_content)
-        static_block = const_block.group()
+        if const_block:
 
-        url_tags = re.finditer(r'{%\s*url [\'"]{1}(\w+)[\'"]{1}\s?(\d*)\s*%}', static_block)     # url
-        for url_tag in url_tags:
-            url_name, arg = url_tag.groups()
-            url = reverse(url_name, args=[arg]) if arg else reverse(url_name)
-            static_block = static_block.replace(url_tag.group(), url, 1)
+            static_block = const_block.group()
 
-        static = settings.STATIC_URL
-        _static_block = re.sub(r"% *static ['\"]([\w\.\d\/\_]+)['\"] *%}", r"/%s/\1"%static, static_block)
+            url_tags = re.finditer(r'{%\s*url [\'"]{1}(\w+)[\'"]{1}\s?(\d*)\s*%}', static_block)     # url
+            for url_tag in url_tags:
+                url_name, arg = url_tag.groups()
+                url = reverse(url_name, args=[arg]) if arg else reverse(url_name)
+                static_block = static_block.replace(url_tag.group(), url, 1)
 
-        sub_content = sub_content.replace(static_block, _static_block)
+            static = settings.STATIC_URL
+            _static_block = re.sub(r"% *static ['\"]([\w\.\d\/\_]+)['\"] *%}", r"/%s/\1"%static, static_block)
+
+            sub_content = sub_content.replace(static_block, _static_block)
 
         return sub_content
 
@@ -451,6 +457,31 @@ class HamlComponent(object):
         for line in _code:
             line = indnt + line
         return '\n'.join(_code)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def _extract_blocks(dct, s, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
@@ -729,10 +760,4 @@ def embed_components(contents, origin, extension ='haml'):
 
             blocks = option.pop('blocks', '')
 
-            second = '\n'.join([str(indent) + line for line in unit.split('\n')])  # prepare for insert to parent tamplate
-
-            unit = ''.join(second)                                                 # join lines to one monotext
-
-            contents = contents[0:m.start()] + unit + contents[m.end(): m.endpos]   # insert to parent template (html/haml)
-
-    return contents
+            second = '\n'.join([str(indent) + line for line in unit.split('\n')])  # prepare for insert to parent 

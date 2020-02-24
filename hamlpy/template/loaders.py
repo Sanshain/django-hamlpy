@@ -8,6 +8,8 @@ from hamlpy import HAML_EXTENSIONS, HAML_UNIT
 from hamlpy.compiler import Compiler
 from hamlpy.template.utils import get_django_template_loaders, components_save, embed_components
 
+from utils import HamlComponent
+
 # Get options from Django settings
 options = {}
 
@@ -43,18 +45,19 @@ def get_haml_loader(loader):
                 t = clock()
 
 ##                from os.path import dirname
-##
 ##                par = lambda d, n=1: par(dirname(d), n-1) if n else (d)
 
+##                if HAML_UNIT.ENABLE:
+##                    contents, option = components_save(contents, origin)
+##                # remaining content (haml(html)
+##                contents = embed_components(contents, origin)
+
                 if HAML_UNIT.ENABLE:
-                    contents, option = components_save(contents, origin)
+                    dtaml = HamlComponent(contents, origin)
+                    res_keeper = dtaml.package_ress()
+                    contents = dtaml.embed_components()
 
-                print 'middle rests: ' + str(clock() - t)
-
-                # remaining content (haml(html)
-
-                contents = embed_components(contents, origin)
-
+                # print 'middle rests: ' + str(clock() - t)
                 print '++++++++++++++++++++++++++++++++++++++++++++++++ hamlpy components time:'
                 print clock() - t
 
