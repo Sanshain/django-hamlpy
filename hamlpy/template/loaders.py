@@ -53,7 +53,7 @@ def get_haml_loader(loader):
 ##                contents = embed_components(contents, origin)
 
                 if HAML_UNIT.ENABLE:
-                    dtaml = HamlComponent(contents, origin)
+                    dtaml = HamlComponent(origin, contents)
                     res_keeper = dtaml.package_ress()
                     contents = dtaml.embed_components()
 

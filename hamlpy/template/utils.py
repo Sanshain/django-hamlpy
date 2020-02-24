@@ -760,4 +760,10 @@ def embed_components(contents, origin, extension ='haml'):
 
             blocks = option.pop('blocks', '')
 
-            second = '\n'.join([str(indent) + line for line in unit.split('\n')])  # prepare for insert to parent 
+            second = '\n'.join([str(indent) + line for line in unit.split('\n')])  # prepare for insert to parent tamplate
+
+            unit = ''.join(second)                                                 # join lines to one monotext
+
+            contents = contents[0:m.start()] + unit + contents[m.end(): m.endpos]   # insert to parent template (html/haml)
+
+    return contents
