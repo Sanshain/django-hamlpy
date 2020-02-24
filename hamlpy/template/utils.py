@@ -3,6 +3,7 @@ import imp
 from django.template import loaders
 
 from warnings import warn
+from collections import namedtuple
 
 from django.core.urlresolvers import reverse
 from django.conf import settings
@@ -13,6 +14,7 @@ from os.path import dirname, splitext
 from hamlpy import HAML_UNIT
 import os
 import re
+
 
 MODULE_EXTENSIONS = tuple([suffix[0] for suffix in imp.get_suffixes()])
 
@@ -92,6 +94,8 @@ haml = HamlComponent(contents, origin)
 inline_ress = haml.package_ress()
 
 
+res = namedtuple('Res', ['type','value'])
+
 class HamlComponent(object):
 
     __slots__ = (
@@ -100,56 +104,49 @@ class HamlComponent(object):
         'content',                              # haml main (root) part of raw content
         'res_keeper',                           # resourse keeper in keeper mode
         'outside_ress',                         # res of inline resourse for aggregate insert into root_content
-        'name',                                 # name of (page)fragment or component
-        'app_path',                             # path to template dir (by app called this template)
-        'type',                                 # type of root (or current) template
+        'name',                                 # name of root (page)fragment
+        'app_path',                             # path to root dir app contained templates dir (by app called this template)
+        'type',                                 # type of root template (page or fragment)
         'static_path',                          # path to static dir (by app called this template)
         'ress',                                 # dict of resourses by type looked as {'style':Res(),'js':Res(type,value)}
-
+        'is_root',                              # define is current component is root or subcontent of root
+        # if its subcontent (fragment or component) of root content (page or fargment):
+        'component_type',                       # type of current component
+        'frag_name',                            # name of current subelement
     )
 
-    def __init__(self, contents, origin):
+    def __init__(self, origin, contents, component_type=None, frag_name=None):
+
         self.raw_content = contents
         self.origin = origin.__str__()
+
+        self.component_type = component_type
+        self.frag_name = frag_name
+        self.is_root = True if frag_name else False
 
         _multicontent = contents.split(HAML_UNIT.UNITS['js'])
 
         self.content = _multicontent[0]
 
-        if len(_multicontent) > 1:
-            other_content = _multicontent[1]
+        if len(_multicontent) > 1: other_content = _multicontent[1]
 
-
-        self.res_keeper = {
-            'blocks' : {}
-        }
+        self.res_keeper = {'blocks' : {}}
         self.outside_ress = {}
 
-        _pathname_origin, _filename_origin = os.path.split(origin.__str__())         # [`.../templates/pages`, `tmpl.haml`]
+        _pathname_origin, _filename_origin = os.path.split(self.origin)         # [`.../templates/pages`, `tmpl.haml`]
 
         self.name = _filename_origin.rsplit('.',1)[0]                                # `tmpl` - name of main page
         self.app_path, self.type = _get_origin_type(_pathname_origin)                # type of root = (page|fragment|component)
-                                                                                     # base_path - base path of app
+        self.static_path = os.path.join(self.app_path, 'static')
+        self.ress = {}
+
         if other_content:
             _other_content = other_content.split(HAML_UNIT.UNITS['style'])
-
-        self.static_path = os.path.join(base_path, 'static')
-
-        _types = (2*('js',), ('style','css'))
-
-        res = namedtuple('Res', ['type','value'])
-
-        self.ress = {tip[0]: res(tip[1], v)  for tip, v in zip(types, _other_content)}
-
-#        self.ress = {tip[0]: {'type':tip[1], 'value' : v}  for tip, v in zip(types, _other_content)}
-#       {'style': {'type': 'css', 'value': 'style_content'}, 'js': {'type': 'js', 'value': 'js_content'}}
+            _types = (2*('js',), ('style','css'))
+            self.ress = {tip[0]: res(tip[1], v)  for tip, v in zip(types, _other_content)}
 
 
-##        self.ress = dict(zip(_other_content, (2*('js',), ('style','css'))))          # # _content : ('js','js'), _content : ('style','..
-
-        # self.script, self.style = self.ress
-
-    def package_ress(self, component_type=None, frag_name=None):
+    def package_ress(self, root_content = None):
         '''
         put resourses (js/css) to appropriate files (or to self.components_keeper if STYLE_PREPROCS
          has suitable flag w/o save to file)
@@ -158,12 +155,16 @@ class HamlComponent(object):
 
         if component_type is None,
         '''
+
+        component_type = self.component_type
+        frag_name = self.frag_name
+
         for tip in self.ress:                                                   # tip => style|js
 
             current_res = self.ress[tip].value
 
             # <0.4ms for one replace
-            current_res = self._extract_blocks(self.outside_ress, current_res)  # self.outside_ress - resourse that should be pasted inside `onload`, 'style' blocks into root template
+            current_res = self._extract_blocks(self.outside_ress, current_res, tip)  # self.outside_ress - resourse that should be pasted inside `onload`, 'style' blocks into root template
 
             # compile static blocks inside the resourse
             current_res = self._restate_const_block(current_res)
@@ -174,15 +175,70 @@ class HamlComponent(object):
                 inside_unit_name=frag_name)
 
 
-            if resourse_carrier:
+            if resourse_carrier:                                                # if is compiled contents
                 res_type = self.ress[tip].type
                 self.res_keeper[res_type] = self.res_keeper.get(res_type, '') + resourse_carrier
 
-        if not frag_name: ress_to_header(self.outside_ress)                     # if root template (just for fragment, not pages) (for page by default recommend place to header directly)
-        else: ress_to_unit(self.outside_ress)                                   # js need to be refresh in dom through createElement
 
 
-    def ress_to_header(self, outside_ress):
+        # if is_root and type = page -> `style`,`onload`, script` to headers by ress_to_header
+        if self.type == "page":
+            if self.is_root: self.ress_move_on_page()
+            elif not self.is_root: self.ress_to_keep(self.outside_ress)
+        if self.type == 'fragment':
+
+            self.outside_ress = self.prep_tags(self.outside_ress)                  # prepare: inside in tags script/style
+
+            if self.is_root:
+                self.ress_append(self.outside_ress, self.content)
+
+            elif not self.is_root:
+                self.ress_append(self.outside_ress, root_content)
+
+
+
+        # js need to be refresh in dom through createElement
+
+        return self.res_keeper
+
+    def ress_append(self, outside_ress, _content=None):
+        _content = _content or self.content
+
+        outres = '\n'.join([outside_ress[blo].value for blo in outside_ress])
+
+        _content = outres + _content
+
+        return _content
+
+    def prep_tags(self, outside_ress):
+        for blo in outside_ress:
+            tip = ':' + ('javascript' if outside_ress[blo].type == 'js' else 'stylus') + '\n'
+
+            subcontent = '%s'%(
+                tip,
+                self.__indent_block('\t', outside_ress[blo].value) + '\n'
+            )
+
+##            subcontent = '<{0} id="{1}">\n{2}\n</{0}>'.format(
+##                outside_ress[blo].type,
+##                self.name + '_' + blo,
+##                outside_ress[blo].value
+##            )
+
+            outside_ress[blo].value = subcontent
+
+        return outside_ress
+
+
+
+
+
+    def ress_move_on_page(self):
+        """
+        find blocks, specified in outside_ress, into self.content and
+        inside its
+        """
+        outside_ress = self.outside_ress
 
         for blo in outside_ress:
 
@@ -192,28 +248,86 @@ class HamlComponent(object):
 
                 warn(blo+' block is undefined in root template %s'%origin.__str__())  # raise Exception(blo+' block is undefined in root template %s'%origin.__str__())
 
+                super_block = r'\t\t={ block.super }\n'
                 content = re.sub(
-                    r'(-extends "[\w\.]+")"', r'\1\n\t-block %s'%(blo, _indent_block(
-                        r'\t', outside_ress[blo]
+                    r'(-extends "[\w\.]+")"', r'\1\n\t-block %s%s%s'%(
+                        blo, super_block, _indent_block(r'\t\t', outside_ress[blo].value)
                     ),
-                    content)
+                    content
                 )
 
             else:
-                _blo = self._indent_block(mch.groups()[0]+' '*4, outside_ress[blo])
+                _blo = self._indent_block(mch.groups()[0]+' '*4, outside_ress[blo].value)
+
+                # (\s|\t)-block \w+(([\s:]*={ *block.super *})|)        ={ *block.super *} - \2
 
                 content = re.sub(r'(\s|\t)(-block %s)'%blo, r'\1\2\n'+_blo, content)
 
 ##            _blo = _indent_block(mch.groups()[0]+' '*8, blo)
 ##            _blo = '\n\1    :javascript\n' + _blo
 
+    def ress_to_keep(self, outside_ress):
+        # called jaust by `haml_root -> embed_components -> haml_init -> package_ress -> ress_to_unit`
+
+        # if thrown by -frag or -unit tags: need insert into root (parent) page header (to -block links)
+        for blo in outside_ress:
+            # append to end each block
+            # component_type()
+            self.components_keeper['blocks'][blo]=(
+                self.components_keeper['blocks'].get(blo, '') + '\n\n' + outside_ress[blo].value
+            )
+
+
     def embed_components(self, reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')):
 
         contents = self.content
-        contents, origin, extension ='haml'
+        # contents, origin, extension ='haml'
+
+        while True:
+
+            component = reg.search(contents)
+
+            if not self.content: break
+            else:
+
+                indent, unit_type, _unit_name = component.groups();
+
+                unit_indn = indent.replace('\t', ' '* 4)
+                unit_type = 'fragments' if unit_type == 'frag' else 'components'
+                unit_name = '.'.join((_unit_name,  extension))
+
+                templates_path = root(origin.__str__(), 'templates')
+
+                unit_file = os.path.join(templates_path, unit_type, unit_name)
+
+                with open(unit_file, 'r') as reader: raw_unit = reader.read()
+
+                haml_component = HamlComponent(origin, raw_unit, unit_type, unit_name)
+                haml_component.package_ress(contents)
+
+                inline_blocks = ress_keeper.pop('blocks', '')                   # onload, style, script
+
+                for frag_block in inline_blocks:
+                    pass
+
+                unit = '\n'.join([str(unit_indn) + line for line in haml_component.content.split('\n')])
+
+                start, end, endpos = component.start(), component.end(), component.endpos
+
+                contents = contents[0:start] + unit + contents[end: endpos]
 
 
-        return self.content
+
+
+        return contents
+
+
+
+
+
+
+
+
 
     def _save_res(self, content, ext, content_type,
         inside_unit_type=None, inside_unit_name=None):
@@ -277,12 +391,15 @@ class HamlComponent(object):
             with open(style_flname, option) as style_file: style_file.write(content)
 
 
-    def _extract_blocks(outside_ress, static_content, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
+
+    def _extract_blocks(outside_ress, static_content, tip, _pattern = re.compile(r'/\*~block (\w+)\*/([\s\S]*?)/\*~\*/')):
 
         ''' status: -fixed -optimize !tested
         find blocks in static_content of component (/*~block NAME */ CONTENT /*~*/) - extract
         NAME and CONTENT inside components to outside_ress and remove its from origin
         '''
+
+
 
         _blocks = _pattern.finditer(static_content)
 
@@ -292,9 +409,16 @@ class HamlComponent(object):
 
             # append key if none or append content to existed key in outside_ress
             # (key is existed block name in root template for appending b.group(2) to it)
-            outside_ress[b.group(1)] = outside_ress.get(b.group(1),'') + '\n' + b.group(2)
 
-        return static_content
+            outside_ress[b.group(1)] = res(
+                tip,
+                outside_ress[b.group(1)].value if b.group(1) in outside_ress else '' + '\n' + b.group(2)
+            )
+
+##            outside_ress[b.group(1)] = outside_ress.get(b.group(1), '') + '\n' + b.group(2)
+
+
+        return static_content                                                   #, b.group(2)
 
 
 
@@ -495,7 +619,7 @@ def components_save(contents, origin, component_type=None, frag_name=None):
 
         _content = _extract_blocks(outside_ress, _content)                      # <0.4ms for one replace
 
-        res = _type_save(
+        _res = _type_save(
             _content.strip(),                                                   # .encode('utf-8')
             static_path,
             base_name,
@@ -505,7 +629,7 @@ def components_save(contents, origin, component_type=None, frag_name=None):
             inside_unit_type=component_type,
             inside_unit_name=frag_name)
 
-        if res: components_keeper[jcss_info[_content][1]] += res                #
+        if _res: components_keeper[jcss_info[_content][1]] += _res                #
 
     def _indent_block(indnt, code):
         _code = code.splitlines()
