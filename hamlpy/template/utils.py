@@ -290,7 +290,7 @@ class HamlComponent(object):
 
             component = reg.search(contents)
 
-            if not self.content: break
+            if not component: break
             else:
 
                 indent, unit_type, _unit_name = component.groups();
@@ -311,7 +311,7 @@ class HamlComponent(object):
 
                 for frag_block in ress_keeper:                                  # js/css
                     self.res_keeper[frag_block] = self.res_keeper.get('frag_block','') + ress_keeper[frag_block]
-                for frag_block in self.ress_keeper:
+                for frag_block in self.res_keeper:
                     _dir = 'style' if frag_block == 'css' else 'style'
                     tgt = os.path.join(self.static_path, _dir, '.'.join(self.name, frag_block))
                     with open(tgt, self.save_flag[frag_block]) as pen: pen.write(self.res_keeper[frag_block])
@@ -367,7 +367,8 @@ class HamlComponent(object):
             if not os.path.exists(pp_path): os.makedirs(pp_path)
 
             pp_path = os.path.join(pp_path, inside_unit_name)
-            content = r'/*%s %s*/\n\n'%(inside_unit_type, inside_unit_name) + content
+            scontent = '/*%s %s*/\n\n'%(inside_unit_type, inside_unit_name)
+            content = str(scontent) + content                                            # .decode('utf-8')
             print '----------------------------------------------------'
 
         else: pp_path = cs_path
