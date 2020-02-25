@@ -6,7 +6,7 @@ from django.template.loaders import filesystem, app_directories
 
 from hamlpy import HAML_EXTENSIONS, HAML_UNIT
 from hamlpy.compiler import Compiler
-from hamlpy.template.utils import get_django_template_loaders, components_save, embed_components
+from hamlpy.template.utils import get_django_template_loaders
 
 from utils import HamlComponent
 
