@@ -102,7 +102,7 @@ class HamlComponent(object):
         self.name = _filename_origin.rsplit('.',1)[0]                                # `tmpl` - name of main page
         self.app_path, self.type = _get_origin_type(_pathname_origin)                # type of root = (page|fragment|component)
         self.static_path = os.path.join(self.app_path, 'static')
-        self.ress = {}
+        self.ress = {'style': res(type='css', value=''), 'js': res(type='js', value='')}
 
         if other_content:
             _other_content = other_content.split(HAML_UNIT.UNITS['style'])
@@ -112,12 +112,12 @@ class HamlComponent(object):
 
     def package_ress(self, root_content = None):
         '''
-        put resourses (js/css) to appropriate files (or to self.components_keeper if STYLE_PREPROCS
-         has suitable flag w/o save to file)
+        - put resourses (js/css) to appropriate files (or to self.components_keeper if STYLE_PREPROCS
+        has suitable flag w/o save to file)
 
-        - and also extract -frag/-component resourses
+        - move to root_content blocks marked as inline blocks (look _extract_blocks() for more details)
 
-        if component_type is None,
+            if component_type is None, means self is root component
         '''
 
         component_type = self.component_type
@@ -127,11 +127,10 @@ class HamlComponent(object):
 
             current_res = self.ress[tip].value
 
-            # <0.4ms for one replace
-            current_res = self._extract_blocks(self.outside_ress, current_res, tip)  # self.outside_ress - resourse that should be pasted inside `onload`, 'style' blocks into root template
+            # `onload`, 'style' blocks for inside to root template move to outside_ress
+            current_res = self._extract_blocks(self.outside_ress, current_res, tip)  # <0.4ms for one replace
 
-            # compile static blocks inside the resourse
-            current_res = self._restate_const_block(current_res)
+            current_res = self._restate_const_block(current_res)                # compile static blocks inside the resourse
 
             resourse_carrier = self._save_res(current_res,
                 self.ress[tip].type, tip,
@@ -142,8 +141,12 @@ class HamlComponent(object):
             if resourse_carrier:                                                # if is compiled contents
                 res_type = self.ress[tip].type                                  # js/css
                 self.res_keeper[res_type] = self.res_keeper.get(res_type, '') + resourse_carrier
+##                print 'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'
             else:
                 self.save_flag[self.ress[tip].type] = 'a'
+##                print 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+##                print self.ress[tip].type
+##                print self.save_flag[self.ress[tip].type]
 
 
         # if is_root and type = page -> `style`,`onload`, script` to headers by ress_to_header
@@ -241,7 +244,9 @@ class HamlComponent(object):
 
 
     def embed_components(self, reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')):
-
+        """
+        parse (frag|unit) tags in template and replace its on its content
+        """
         contents = self.content
         extension ='haml'
 
@@ -268,6 +273,7 @@ class HamlComponent(object):
                 ress_keeper = haml_component.package_ress(contents)
 
 
+
                 for frag_block in ress_keeper:                                  # js/css
                     self.res_keeper[frag_block] = self.res_keeper.get('frag_block','') + ress_keeper[frag_block]
                 for frag_block in self.res_keeper:
@@ -280,7 +286,6 @@ class HamlComponent(object):
                 start, end, endpos = component.start(), component.end(), component.endpos
 
                 contents = contents[0:start] + unit + contents[end: endpos]
-
 
         return contents
 
@@ -309,7 +314,7 @@ class HamlComponent(object):
         base_name = self.name
         template_type = self.type
 
-        option = 'w' if inside_unit_name else 'a'
+        option = 'a' if inside_unit_name else 'w'                               # option for saving to common root file
         ext = ext or content_type
 
 
@@ -328,6 +333,7 @@ class HamlComponent(object):
             pp_path = os.path.join(pp_path, inside_unit_name)
             scontent = '/*%s %s*/\n\n'%(inside_unit_type, inside_unit_name)
             content = str(scontent) + content                                            # .decode('utf-8')
+            print scontent
             print '----------------------------------------------------'
 
         else: pp_path = cs_path
@@ -352,7 +358,7 @@ class HamlComponent(object):
         else:
 
             style_flname = cs_path + '.' + (sub_content or ext or content_type)
-            with open(style_flname, option) as style_file: style_file.write(content)
+            with open(style_flname, option) as style_file: style_file.write(content.encode('utf-8'))
 
 
 
@@ -408,7 +414,7 @@ class HamlComponent(object):
             static = settings.STATIC_URL
             _static_block = re.sub(r"% *static ['\"]([\w\.\d\/\_]+)['\"] *%}", r"/%s/\1"%static, static_block)
 
-            sub_content = sub_content.replace(static_block, _static_block)
+            sub_content = sub_content.decode('utf-8').replace(static_block, _static_block)
 
         return sub_content
 
@@ -417,24 +423,6 @@ class HamlComponent(object):
         for line in _code:
             line = indnt + line
         return '\n'.join(_code)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -53,13 +53,15 @@ def get_haml_loader(loader):
 ##                contents = embed_components(contents, origin)
 
                 if HAML_UNIT.ENABLE:
-                    dtaml = HamlComponent(origin, contents)
-                    res_keeper = dtaml.package_ress()
-                    contents = dtaml.embed_components()
 
-                # print 'middle rests: ' + str(clock() - t)
-                print '++++++++++++++++++++++++++++++++++++++++++++++++ hamlpy components time:'
-                print clock() - t
+                    dtaml = HamlComponent(origin, contents)
+                    print 'HamlComponent create: ' + str(clock() - t)
+                    res_keeper = dtaml.package_ress()
+                    print 'package_ress: ' + str(clock() - t)
+                    contents = dtaml.embed_components()
+                    print 'embed_components: ' + str(clock() - t)
+
+                    print '++++++++++++++++++++++++++++++++++++++++++++++++ hamlpy components completed'
 
 
 #               now contents is full. Prepare it:
