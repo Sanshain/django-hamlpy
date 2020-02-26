@@ -92,7 +92,7 @@ class HamlComponent(object):
 
         self.content = _multicontent[0]
 
-        if len(_multicontent) > 1: other_content = _multicontent[1]
+        other_content = _multicontent[1] if len(_multicontent) > 1 else None
 
         self.res_keeper = {}
         self.save_flag = { 'js':'w', 'css' : 'w' }                              # defaultdict(lambda x: 'w')
@@ -434,7 +434,7 @@ class HamlComponent(object):
             for url_tag in url_tags:
                 url_name, arg = url_tag.groups()
 
-                url = reverse(url_name, args=[arg]) if arg else reverse(url_name)
+                url = str(reverse(url_name, args=[arg]) if arg else reverse(url_name))
                 _static_block = _static_block.replace(url_tag.group(), url, 1)
 
             static = settings.STATIC_URL
@@ -442,7 +442,8 @@ class HamlComponent(object):
 
             # pdb.set_trace()
 
-            sub_content = sub_content.decode('utf-8').replace(static_block, _static_block)
+            # sub_content = sub_content.decode('utf-8') if sub_content is str else sub_content
+            sub_content = sub_content.replace(static_block, _static_block)
 
         return sub_content
 
