@@ -241,23 +241,6 @@ class HamlComponent(object):
         return content
 
 
-    def ress_to_keep(self, outside_ress, content=None):
-        '''
-        Obsolete
-        '''
-        # called jaust by `haml_root -> embed_components -> haml_init -> package_ress -> ress_to_unit`
-
-        # if thrown by -frag or -unit tags: need insert into root (parent) page header (to -block links)
-        for blo in outside_ress:
-            # append to end each block
-            # component_type()
-            pdb.set_trace()
-
-            self.res_keeper['blocks'][blo]=(
-                self.res_keeper['blocks'].get(blo, '') + '\n\n' + outside_ress[blo].value
-            )
-
-
     def embed_components(self, reg = re.compile('([\t ]*)-(frag|unit) "([_\w]+)"')):
         """
         parse (frag|unit) tags in template and replace its on its content

@@ -95,8 +95,7 @@ def get_haml_loader(loader):
                 # save result
 
                 html_file = str(origin).rsplit('.', 1)[0] + '.html'
-                with open(html_file, 'w') as html:
-                    html.write(r)
+                with open(html_file, 'w') as html: html.write(r)
 
                 return r
 
