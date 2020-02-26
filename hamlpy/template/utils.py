@@ -15,6 +15,7 @@ from hamlpy import HAML_UNIT
 import os
 import re
 
+import pdb
 
 MODULE_EXTENSIONS = tuple([suffix[0] for suffix in imp.get_suffixes()])
 
@@ -401,18 +402,27 @@ class HamlComponent(object):
         '''
 
         const_block = _pattern.search(sub_content)
+
+        print '_______******************************************'
+
         if const_block:
 
             static_block = const_block.group()
 
             url_tags = re.finditer(r'{%\s*url [\'"]{1}(\w+)[\'"]{1}\s?(\d*)\s*%}', static_block)     # url
+
+            _static_block = static_block
+
             for url_tag in url_tags:
                 url_name, arg = url_tag.groups()
+
                 url = reverse(url_name, args=[arg]) if arg else reverse(url_name)
-                static_block = static_block.replace(url_tag.group(), url, 1)
+                _static_block = _static_block.replace(url_tag.group(), url, 1)
 
             static = settings.STATIC_URL
-            _static_block = re.sub(r"% *static ['\"]([\w\.\d\/\_]+)['\"] *%}", r"/%s/\1"%static, static_block)
+            _static_block = re.sub(r"{% *static ['\"]([\w\.\d\/\_]+)['\"] *%}", r"%s\1"%static, _static_block)
+
+            # pdb.set_trace()
 
             sub_content = sub_content.decode('utf-8').replace(static_block, _static_block)
 
