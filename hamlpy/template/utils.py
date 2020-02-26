@@ -86,7 +86,7 @@ class HamlComponent(object):
 
         self.component_type = component_type
         self.frag_name = frag_name
-        self.is_root = True if frag_name else False
+        self.is_root = False if frag_name else True
 
         _multicontent = contents.split(HAML_UNIT.UNITS['js'])
 
@@ -149,23 +149,28 @@ class HamlComponent(object):
 ##                print self.ress[tip].type
 ##                print self.save_flag[self.ress[tip].type]
 
-
         # if is_root and type = page -> `style`,`onload`, script` to headers by ress_to_header
-        if self.type == "page":
-            if self.is_root: self.ress_move_on_page()
-            elif not self.is_root: self.ress_to_keep(self.outside_ress)
-        if self.type == 'fragment' or self.type == 'component':
+        if self.type == "pages":
+            if self.is_root:
+                self.content = self.ress_move_on_page()
+            elif not self.is_root:
+                # pass
+                root_content = self.ress_move_on_page(root_content)
+
+                # self.ress_to_keep(self.outside_ress, root_content)
+        elif self.type == 'fragments' or self.type == 'components':
 
             self.outside_ress = self.prep_tags(self.outside_ress)                  # prepare: inside in tags script/style
 
-            if self.is_root: self.ress_append(self.outside_ress, self.content)
+            if self.is_root:
+                self.content = self.ress_append(self.outside_ress)
             elif not self.is_root:
-                self.ress_append(self.outside_ress, root_content)
+                root_content = self.ress_append(self.outside_ress, root_content)
 
 
         # js need to be refresh in dom through createElement
 
-        return self.res_keeper
+        return self.res_keeper if self.is_root else (self.res_keeper, root_content)
 
     def ress_append(self, outside_ress, _content=None):
         _content = _content or self.content
@@ -199,31 +204,32 @@ class HamlComponent(object):
 
 
 
-    def ress_move_on_page(self):
+    def ress_move_on_page(self, content=None):
         """
         find blocks, specified in outside_ress, into self.content and
         inside its
         """
         outside_ress = self.outside_ress
+        content = content or self.content
 
         for blo in outside_ress:
 
-            mch = re.search(r'(\s|\t)-block %s'%blo, self.content)                   # blo = links, onload etc
+            mch = re.search(r'(\s|\t)-block %s'%blo, content)                   # blo = links, onload etc
 
             if not mch:
 
-                warn(blo+' block is undefined in root template %s'%origin.__str__())  # raise Exception(blo+' block is undefined in root template %s'%origin.__str__())
+                warn(blo+' block is undefined in root template %s'%self.origin.__str__())  # raise Exception(blo+' block is undefined in root template %s'%origin.__str__())
 
                 super_block = r'\t\t={ block.super }\n'
                 content = re.sub(
                     r'(-extends "[\w\.]+")"', r'\1\n\t-block %s%s%s'%(
-                        blo, super_block, _indent_block(r'\t\t', outside_ress[blo].value)
+                        blo, super_block, __indent_block(r'\t\t', outside_ress[blo].value)
                     ),
                     content
                 )
 
             else:
-                _blo = self._indent_block(mch.groups()[0]+' '*4, outside_ress[blo].value)
+                _blo = self.__indent_block(mch.groups()[0]+' '*4, outside_ress[blo].value)
 
                 # (\s|\t)-block \w+(([\s:]*={ *block.super *})|)        ={ *block.super *} - \2
 
@@ -232,15 +238,23 @@ class HamlComponent(object):
 ##            _blo = _indent_block(mch.groups()[0]+' '*8, blo)
 ##            _blo = '\n\1    :javascript\n' + _blo
 
-    def ress_to_keep(self, outside_ress):
+        return content
+
+
+    def ress_to_keep(self, outside_ress, content=None):
+        '''
+        Obsolete
+        '''
         # called jaust by `haml_root -> embed_components -> haml_init -> package_ress -> ress_to_unit`
 
         # if thrown by -frag or -unit tags: need insert into root (parent) page header (to -block links)
         for blo in outside_ress:
             # append to end each block
             # component_type()
-            self.components_keeper['blocks'][blo]=(
-                self.components_keeper['blocks'].get(blo, '') + '\n\n' + outside_ress[blo].value
+            pdb.set_trace()
+
+            self.res_keeper['blocks'][blo]=(
+                self.res_keeper['blocks'].get(blo, '') + '\n\n' + outside_ress[blo].value
             )
 
 
@@ -258,10 +272,10 @@ class HamlComponent(object):
             if not component: break
             else:
 
-                indent, unit_type, _unit_name = component.groups();
+                _indent, _unit_type, _unit_name = component.groups();
 
-                unit_indn = indent.replace('\t', ' '* 4)
-                unit_type = 'fragments' if unit_type == 'frag' else 'components'
+                unit_indn = _indent.replace('\t', ' '* 4)
+                unit_type = 'fragments' if _unit_type == 'frag' else 'components'
                 unit_name = '.'.join((_unit_name,  extension))
 
                 templates_path = root(self.origin, 'templates')
@@ -271,7 +285,7 @@ class HamlComponent(object):
                 with open(unit_file, 'r') as reader: raw_unit = reader.read()
 
                 haml_component = HamlComponent(self.origin, raw_unit, unit_type, unit_name)
-                ress_keeper = haml_component.package_ress(contents)
+                ress_keeper, contents = haml_component.package_ress(contents)
 
 
 
@@ -284,9 +298,14 @@ class HamlComponent(object):
 
                 unit = '\n'.join([str(unit_indn) + line for line in haml_component.content.split('\n')])
 
-                start, end, endpos = component.start(), component.end(), component.endpos
+                # pdb.set_trace()
 
-                contents = contents[0:start] + unit + contents[end: endpos]
+                contents = contents.replace('%s-%s "%s"'%(_indent, _unit_type, _unit_name), unit, 1)
+
+                ## next case need recalc contents len before and after `ress_keeper, contents = haml_component.package_ress(contents)`
+                ## and will work just for add in header (before -frag/unit tag). Too tricky
+                # start, end, endpos = component.start(), component.end(), component.endpos
+                # contents = contents[0:start] + unit + contents[end: endpos]
 
         return contents
 
@@ -359,7 +378,8 @@ class HamlComponent(object):
         else:
 
             style_flname = cs_path + '.' + (sub_content or ext or content_type)
-            with open(style_flname, option) as style_file: style_file.write(content.encode('utf-8'))
+            _content = content #content.encode('utf-8') if type(content) is not str else content
+            with open(style_flname, option) as style_file: style_file.write(_content)
 
 
 
@@ -430,8 +450,8 @@ class HamlComponent(object):
 
     def __indent_block(self, indnt, code):
         _code = code.splitlines()
-        for line in _code:
-            line = indnt + line
+        for i, line in enumerate(_code):
+            _code[i] = indnt + line
         return '\n'.join(_code)
 
 
