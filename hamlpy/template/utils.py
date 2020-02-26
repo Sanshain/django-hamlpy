@@ -298,8 +298,6 @@ class HamlComponent(object):
 
                 unit = '\n'.join([str(unit_indn) + line for line in haml_component.content.split('\n')])
 
-                # pdb.set_trace()
-
                 contents = contents.replace('%s-%s "%s"'%(_indent, _unit_type, _unit_name), unit, 1)
 
                 ## next case need recalc contents len before and after `ress_keeper, contents = haml_component.package_ress(contents)`
@@ -378,7 +376,7 @@ class HamlComponent(object):
         else:
 
             style_flname = cs_path + '.' + (sub_content or ext or content_type)
-            _content = content #content.encode('utf-8') if type(content) is not str else content
+            _content = content.encode('utf-8') if type(content) is not str else content
             with open(style_flname, option) as style_file: style_file.write(_content)
 
 

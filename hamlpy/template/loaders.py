@@ -67,24 +67,29 @@ def get_haml_loader(loader):
 #               now contents is full. Prepare it:
 
 
+                # just for django tags and filters:
+                contents = re.sub(r'(?<=\n)([\ \t]+)(-[\w \.\_]+):\s?([\w+\. \_]+)',r'\1\2\n\1\t\3', contents) # : => \n\t
+
+
+
                 tags = "(div|li|ul|h2|h3|main|button|link|script|form|label)"
                 contents = re.sub(r"((\n|^)\s*)(?={}[\s\.\#\(])".format(tags), r"\1%", contents) #tags without %
 
                 ## separate on lines: %main %section => %main \n %section
                 contents = re.sub(r"(?<=\n)([\ \t]+)((%|\.)\w+[\ ])(%\S+)", r'\1\2\n\1\t\4', contents)
 
+
                 contents = re.sub(r"~([\w\s\"\.\/]+)", r'{% \1 %}', contents)               # ~v => {% v %}
 
-                # just for django tags and filters:
-                contents = re.sub(r'(?<=\n)([\ \t]+)(-[\w \.\_]+):\s?([\w+\. \_]+)',r'\1\2\n\1\t\3', contents) # : => \n\t
+
 
 ##                print contents
+
 
                 haml_file = str(origin).rsplit('.', 1)[0] + '__log' + '.haml'
                 with open(haml_file, 'w') as pen: pen.write(contents)
 
-
-
+                # contents = contents.decode('utf-8') if type(contents) is str else contents
                 r = compiler.process(contents)
 
                 # save result
