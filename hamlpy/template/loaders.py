@@ -8,7 +8,12 @@ from hamlpy import HAML_EXTENSIONS, HAML_UNIT
 from hamlpy.compiler import Compiler
 from hamlpy.template.utils import get_django_template_loaders
 
-from utils import HamlComponent
+from utils import clean_sugar, HamlComponent
+
+
+import re
+if settings.DEBUG:
+    from time import clock
 
 # Get options from Django settings
 options = {}
@@ -28,29 +33,15 @@ def get_haml_loader(loader):
             # Django>=1.9
             contents = super(Loader, self).get_contents(origin)
 
-            print origin.template_name
-            name, _extension = os.path.splitext(origin.template_name)
-            # os.path.splitext always returns a period at the start of extension
+            print 'start load template: ' + origin.template_name
+            name, _extension = os.path.splitext(origin.template_name)           # os.path.splitext always returns a period at the start of extension
             extension = _extension.lstrip('.')
 
 
             if extension in HAML_EXTENSIONS:
                 compiler = Compiler(options=options)
 
-                import re
-                from time import clock
-
-
-
                 t = clock()
-
-##                from os.path import dirname
-##                par = lambda d, n=1: par(dirname(d), n-1) if n else (d)
-
-##                if HAML_UNIT.ENABLE:
-##                    contents, option = components_save(contents, origin)
-##                # remaining content (haml(html)
-##                contents = embed_components(contents, origin)
 
                 if HAML_UNIT.ENABLE:
 
