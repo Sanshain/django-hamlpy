@@ -64,40 +64,22 @@ def get_haml_loader(loader):
                     print '++++++++++++++++++++++++++++++++++++++++++++++++ hamlpy components completed'
 
 
-#               now contents is full. Prepare it:
+##              now contents is full. Prepare it:
+                contents = clean_sugar(contents)
 
 
-                # just for django tags and filters:
-                contents = re.sub(r'(?<=\n)([\ \t]+)(-[\w \.\_]+):\s?([\w+\. \_]+)',r'\1\2\n\1\t\3', contents) # : => \n\t
-
-
-
-                tags = "(div|li|ul|h2|h3|main|button|link|script|form|label)"
-                contents = re.sub(r"((\n|^)\s*)(?={}[\s\.\#\(])".format(tags), r"\1%", contents) #tags without %
-
-                ## separate on lines: %main %section => %main \n %section
-                contents = re.sub(r"(?<=\n)([\ \t]+)((%|\.)\w+[\ ])(%\S+)", r'\1\2\n\1\t\4', contents)
-
-
-                contents = re.sub(r"~([\w\s\"\.\/]+)", r'{% \1 %}', contents)               # ~v => {% v %}
-
-
-
-##                print contents
-
-
+## save contents before compiler
                 haml_file = str(origin).rsplit('.', 1)[0] + '__log' + '.haml'
                 with open(haml_file, 'w') as pen: pen.write(contents)
 
-                # contents = contents.decode('utf-8') if type(contents) is str else contents
-                r = compiler.process(contents)
+##                contents = contents.decode('utf-8') if type(contents) is str else contents
+                html_content = compiler.process(contents)
 
-                # save result
-
+##  save result after compiling
                 html_file = str(origin).rsplit('.', 1)[0] + '.html'
-                with open(html_file, 'w') as html: html.write(r)
+                with open(html_file, 'w') as html: html.write(html_content)
 
-                return r
+                return html_content
 
             return contents
 

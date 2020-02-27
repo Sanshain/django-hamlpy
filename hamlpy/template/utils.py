@@ -36,6 +36,23 @@ def package_contents(package):
     return contents
 
 
+def clean_sugar(contents):
+
+    # just for django tags and filters:
+    contents = re.sub(r'(?<=\n)([\ \t]+)(-[\w \.\_]+):\s?([\w+\. \_]+)',r'\1\2\n\1\t\3', contents) # : => \n\t
+
+
+    tags = "(div|li|ul|h2|h3|main|button|link|script|form|label)"
+    contents = re.sub(r"((\n|^)\s*)(?={}[\s\.\#\(])".format(tags), r"\1%", contents) #tags without %
+
+    ## separate on lines: %main %section => %main \n %section
+    contents = re.sub(r"(?<=\n)([\ \t]+)((%|\.)\w+[\ ])(%\S+)", r'\1\2\n\1\t\4', contents)
+
+
+    contents = re.sub(r"~([\w\s\"\.\/]+)", r'{% \1 %}', contents)               # ~v => {% v %}
+
+    return contents
+
 
 # par = lambda d, edge="templates": par(dirname(d), n-1) if n else (d)
 root = lambda p, e, d=3: (
@@ -438,7 +455,6 @@ class HamlComponent(object):
 
 
 
-
 def _get_origin_type(pathname_origin):
 
     base_path, template_type = os.path.split(pathname_origin)
@@ -450,6 +466,8 @@ def _get_origin_type(pathname_origin):
     base_path = os.path.dirname(base_path) if template_type else base_path      # path of app (for ex - 'main')
 
     return base_path, template_type
+
+
 
 
 
