@@ -19,6 +19,12 @@ For include `={...}` sign variables set `self.django_inline_style = True` in com
 
 Comment is `#` on first symbol of line or tag -comment for multiline comments
 
+## Installing
+
+    pip install git+https://github.com/Sanshain/django-hamlpy
+
+
+
 # From original documentation:
 
 Why type:
